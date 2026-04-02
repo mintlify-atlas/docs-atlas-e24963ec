@@ -1,97 +1,91 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Ruby — The Programming Language"
+description: "A dynamic, object-oriented language designed for developer happiness and productivity."
 ---
 
-## Setting up
+Ruby is an interpreted, object-oriented programming language known for its elegant syntax, expressive style, and vibrant ecosystem. Created by Yukihiro Matsumoto (Matz) in 1995, Ruby is built on the principle that programming should be a joy.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Introduction" icon="book-open" href="/introduction">
+    Learn what Ruby is, why developers love it, and see your first Ruby program.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Write and run your first Ruby program in minutes.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Installation" icon="download" href="/installation">
+    Install Ruby on macOS, Linux, or Windows using the method that works for you.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Language Reference" icon="code" href="/language/syntax">
+    Explore Ruby's syntax, classes, modules, exceptions, and concurrency features.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Core language features
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Classes & Modules" icon="cubes" href="/language/classes-and-modules">
+    Object-oriented programming, mixins, and Ruby's powerful module system.
+  </Card>
+  <Card title="Exceptions" icon="triangle-exclamation" href="/language/exceptions">
+    Raise, rescue, and handle exceptions cleanly in Ruby programs.
+  </Card>
+  <Card title="Fibers & Concurrency" icon="arrows-spin" href="/language/fibers-and-concurrency">
+    Cooperative concurrency with Fibers, Ractors, and the Scheduler interface.
+  </Card>
+  <Card title="Core Classes" icon="layer-group" href="/core/string">
+    String, Array, Hash, Numeric, IO, File, and Regexp — documented with examples.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Performance & runtime
 
-## Need inspiration?
+<CardGroup cols={2}>
+  <Card title="YJIT" icon="bolt" href="/performance/yjit">
+    Yet Another JIT — Ruby's built-in just-in-time compiler for faster execution.
+  </Card>
+  <Card title="Garbage Collection" icon="recycle" href="/performance/gc">
+    Tune Ruby's GC for your workload and understand memory management.
+  </Card>
+  <Card title="Standard Library" icon="box-archive" href="/stdlib/overview">
+    Networking, templating, parsing, and more — all bundled with Ruby.
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/contributing/overview">
+    Help improve Ruby — from bug reports to patches and documentation.
+  </Card>
+</CardGroup>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Get started in seconds
+
+<Steps>
+  <Step title="Install Ruby">
+    Use your platform's recommended method — rbenv, RVM, or the official installer.
+    ```bash
+    # macOS with Homebrew
+    brew install rbenv
+    rbenv install 3.4.0
+    rbenv global 3.4.0
+    ```
+  </Step>
+  <Step title="Write your first program">
+    Create a file `hello.rb` and write your first Ruby program:
+    ```ruby hello.rb
+    # Everything in Ruby is an object
+    greeting = "Hello, World!"
+    puts greeting.upcase        # => "HELLO, WORLD!"
+    puts greeting.length        # => 13
+    puts greeting.reverse       # => "!dlroW ,olleH"
+
+    # Blocks and iterators
+    3.times { |i| puts "Run #{i + 1}" }
+    ```
+  </Step>
+  <Step title="Run it">
+    Execute your program from the terminal:
+    ```bash
+    ruby hello.rb
+    ```
+  </Step>
+  <Step title="Explore the docs">
+    Dive into the [Language Reference](/language/syntax) to learn Ruby's syntax, or jump straight to [Core Classes](/core/string) to see what's available out of the box.
+  </Step>
+</Steps>

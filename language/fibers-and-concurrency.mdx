@@ -1,0 +1,441 @@
+---
+title: "Fibers and Concurrency"
+description: "Cooperative concurrency with Fibers, parallel execution with Ractors, and async I/O via the Scheduler."
+---
+
+Ruby offers several primitives for concurrency and parallelism. Choose the right one based on your workload:
+
+| Primitive | Model | Parallelism | Best for |
+|-----------|-------|-------------|----------|
+| **Fiber** | Cooperative | No | Generators, coroutines, async I/O |
+| **Thread** | Preemptive (GVL-constrained) | I/O only in MRI | I/O-bound work, background tasks |
+| **Ractor** | Actor | Yes (true CPU parallelism) | CPU-bound work, data isolation |
+
+## Fibers
+
+Fibers provide **cooperative concurrency**: they execute a block and can voluntarily yield control back to the caller, then be resumed later. Only one fiber runs at a time.
+
+### Basic Usage
+
+```ruby
+puts "1: Start program."
+
+f = Fiber.new do
+  puts "3: Entered fiber."
+  Fiber.yield
+  puts "5: Resumed fiber."
+end
+
+puts "2: Resume fiber first time."
+f.resume
+
+puts "4: Resume fiber second time."
+f.resume
+
+puts "6: Finished."
+
+# Output:
+# 1: Start program.
+# 2: Resume fiber first time.
+# 3: Entered fiber.
+# 4: Resume fiber second time.
+# 5: Resumed fiber.
+# 6: Finished.
+```
+
+### Fibers as Generators
+
+Fibers can produce a sequence of values lazily:
+
+```ruby
+fibonacci = Fiber.new do
+  a, b = 0, 1
+  loop do
+    Fiber.yield a
+    a, b = b, a + b
+  end
+end
+
+10.times { print "#{fibonacci.resume} " }
+# => 0 1 1 2 3 5 8 13 21 34
+```
+
+### Passing Values Between Fibers
+
+`Fiber.yield` can return a value to `resume`, and `resume` can pass a value into the fiber:
+
+```ruby
+accumulator = Fiber.new do |first|
+  sum = first
+  loop do
+    input = Fiber.yield sum
+    sum += input
+  end
+end
+
+accumulator.resume(0)    # starts fiber, sum = 0
+accumulator.resume(10)   # => 10
+accumulator.resume(20)   # => 30
+accumulator.resume(5)    # => 35
+```
+
+### Fiber.transfer
+
+`Fiber#transfer` switches to another fiber without establishing a caller/callee relationship. Unlike `resume`/`yield`, control does not automatically return to the previous fiber.
+
+```ruby
+f1 = Fiber.new do
+  puts "f1: step 1"
+  f2.transfer
+  puts "f1: step 2"
+end
+
+f2 = Fiber.new do
+  puts "f2: step 1"
+  f1.transfer
+  puts "f2: step 2"  # not reached in this example
+end
+
+f1.resume
+# f1: step 1
+# f2: step 1
+# f1: step 2
+```
+
+### Non-Blocking Fibers
+
+Fibers can be created as non-blocking, meaning their I/O operations are routed through the fiber scheduler:
+
+```ruby
+Fiber.new do
+  puts Fiber.current.blocking?   # => false
+
+  # These may invoke Fiber.scheduler hooks instead of blocking:
+  io.read(...)
+  io.write(...)
+  sleep(1)
+end.resume
+
+# Shorthand using Fiber.schedule
+Fiber.schedule do
+  puts Fiber.current.blocking?   # => false
+  # I/O here is non-blocking
+end
+```
+
+## Threads
+
+Ruby threads are OS threads managed by the Ruby runtime. In MRI (CRuby), a Global VM Lock (GVL) prevents true CPU parallelism for Ruby code, but I/O operations release the GVL, enabling concurrent I/O.
+
+```ruby
+# Creating and joining threads
+t1 = Thread.new do
+  3.times { |i| puts "Thread 1, step #{i}"; sleep 0.1 }
+end
+
+t2 = Thread.new do
+  3.times { |i| puts "Thread 2, step #{i}"; sleep 0.1 }
+end
+
+t1.join
+t2.join
+puts "Both threads finished."
+```
+
+### Thread Synchronization
+
+Use `Mutex` to protect shared state from concurrent modification:
+
+```ruby
+mutex   = Mutex.new
+counter = 0
+
+threads = 10.times.map do
+  Thread.new do
+    1000.times do
+      mutex.synchronize { counter += 1 }
+    end
+  end
+end
+
+threads.each(&:join)
+puts counter   # => 10000 (always correct with mutex)
+```
+
+### Thread-Local Variables
+
+```ruby
+Thread.current[:request_id] = SecureRandom.uuid
+
+threads = 3.times.map do |i|
+  Thread.new do
+    Thread.current[:id] = i
+    sleep rand
+    puts "Thread #{Thread.current[:id]} done"
+  end
+end
+
+threads.each(&:join)
+```
+
+### Queue for Thread-Safe Communication
+
+```ruby
+queue = Queue.new
+
+producer = Thread.new do
+  5.times do |i|
+    queue << "item_#{i}"
+    sleep 0.1
+  end
+  queue << :done
+end
+
+consumer = Thread.new do
+  loop do
+    item = queue.pop
+    break if item == :done
+    puts "Consumed: #{item}"
+  end
+end
+
+producer.join
+consumer.join
+```
+
+## Ractors
+
+Ractors are Ruby's actor-like concurrency abstraction, introduced in Ruby 3.0. Unlike threads, ractors can run Ruby code in **true parallel** on multiple CPU cores by not sharing the GVL.
+
+<Note>
+  Ractors are experimental and their API may change. Some features are still being stabilized.
+</Note>
+
+### Creating a Ractor
+
+```ruby
+r = Ractor.new do
+  "hello from ractor"
+end
+
+r.value   # => "hello from ractor"
+
+# Named ractor
+r = Ractor.new name: 'worker' do
+  expensive_computation
+end
+
+r.name    # => "worker"
+```
+
+### Shareable vs Unshareable Objects
+
+Ractors enforce strict isolation: most objects can only be accessed by one ractor at a time.
+
+```ruby
+# Shareable objects (can be shared across ractors)
+123          # all Integers are shareable
+:symbol      # Symbols are shareable
+"str".freeze # frozen strings with no unshareable ivars are shareable
+Object       # Class/Module objects are always shareable
+
+# Not shareable — must be copied or moved
+arr = [1, 2, 3]          # mutable array
+str = "hello"            # mutable string
+h   = { a: [1, 2] }.freeze  # frozen hash but contains unshareable [1,2]
+```
+
+Accessing an outer variable inside a Ractor block raises an error:
+
+```ruby
+begin
+  a = true
+  r = Ractor.new do
+    a   # => Ractor::IsolationError
+  end
+  r.join
+rescue Ractor::IsolationError => e
+  puts e.message
+end
+```
+
+### Communication with Ractor::Port
+
+Ractors communicate by passing messages through `Ractor::Port`:
+
+```ruby
+port = Ractor::Port.new
+
+Ractor.new port do |port|
+  port << 42          # send message to port
+end
+
+port.receive          # => 42 (only the creating ractor can receive)
+```
+
+Use `Ractor#send` and `Ractor.receive` for the default port:
+
+```ruby
+r = Ractor.new do
+  msg = Ractor.receive
+  "processed: #{msg}"
+end
+
+r.send("hello")
+r.value   # => "processed: hello"
+```
+
+### Parallel Computation Example
+
+```ruby
+# Process work items in parallel across multiple ractors
+items   = (1..8).to_a
+workers = 4
+
+results = items.each_slice(items.size / workers).map do |chunk|
+  Ractor.new chunk do |data|
+    data.map { |n| n ** 2 }
+  end
+end.map(&:value).flatten
+
+results   # => [1, 4, 9, 16, 25, 36, 49, 64]
+```
+
+### Copy and Move Semantics
+
+When sending unshareable objects, choose between copying (default) and moving:
+
+```ruby
+data = [1, 2, 3, 4, 5]
+
+# Copy (default) — original is still accessible
+r1 = Ractor.new data do |d|
+  d.sum
+end
+data.length   # => 5 (original unchanged)
+
+# Move — original becomes inaccessible in sending ractor
+r2 = Ractor.new do
+  Ractor.receive.sum
+end
+r2.send(data, move: true)
+# data.length   # => Ractor::MovedError
+```
+
+### Waiting on Multiple Ractors
+
+```ruby
+ractors = 3.times.map do |i|
+  Ractor.new i do |n|
+    sleep rand(0.1..0.5)
+    "result from ractor #{n}"
+  end
+end
+
+3.times do
+  ractor, value = Ractor.select(*ractors)
+  puts "#{ractor.name}: #{value}"
+end
+```
+
+## The Scheduler Interface
+
+The fiber scheduler enables **non-blocking I/O** without threads. Setting a scheduler causes blocking I/O operations (reads, writes, sleeps, DNS lookups) to yield to the scheduler instead of blocking the OS thread.
+
+```ruby
+Fiber.set_scheduler(MyScheduler.new)
+```
+
+When the thread exits, the scheduler is automatically unset:
+
+```ruby
+Fiber.set_scheduler(nil)
+```
+
+### Implementing a Scheduler
+
+A scheduler is any object implementing the following interface:
+
+```ruby
+class Scheduler
+  # Wait for a process to exit
+  def process_wait(pid, flags)
+    Thread.new { Process::Status.wait(pid, flags) }.value
+  end
+
+  # Wait for IO readiness
+  # events is a bitmask of IO::READABLE, IO::WRITABLE, IO::PRIORITY
+  def io_wait(io, events, timeout)
+  end
+
+  # Sleep the current fiber for `duration` seconds
+  def kernel_sleep(duration = nil)
+  end
+
+  # Run a block with a timeout; raise `klass` if it expires
+  def timeout_after(duration, klass, *arguments, &block)
+  end
+
+  # Resolve a hostname to IP addresses
+  def address_resolve(hostname)
+  end
+
+  # Block the calling fiber
+  def block(blocker, timeout = nil)
+  end
+
+  # Unblock a previously blocked fiber (thread-safe)
+  def unblock(blocker, fiber)
+  end
+
+  # Create a new non-blocking fiber
+  def fiber(&block)
+    Fiber.new(blocking: false, &block)
+  end
+
+  # Called when the thread exits; run the event loop to completion
+  def close
+    self.run
+  end
+
+  def run
+    # implement event loop here
+  end
+end
+```
+
+<Tip>
+  Rather than implementing your own scheduler, use a library like the [`async`](https://github.com/socketry/async) gem, which provides a production-quality scheduler built on the fiber scheduler interface.
+</Tip>
+
+### Non-Blocking Primitives
+
+When a scheduler is set, these classes become fiber-aware:
+
+- **IO** — reads and writes yield to the scheduler instead of blocking.
+- **Mutex** — fiber-specific, works in non-blocking contexts.
+- **ConditionVariable** — fiber-specific.
+- **Queue / SizedQueue** — fiber-specific.
+- **Thread#join** — yields to the scheduler instead of blocking.
+
+`IO#close` interrupts all fibers blocked on that IO, ensuring clean teardown.
+
+## Choosing the Right Primitive
+
+<Accordion title="When to use Fibers">
+  - You need **cooperative, predictable** concurrency — e.g., a generator that produces values lazily, or a coroutine-style state machine.
+  - You are doing **async I/O** with a scheduler and want lightweight, low-overhead concurrency without OS threads.
+  - You want fine-grained control over when context switches happen.
+</Accordion>
+
+<Accordion title="When to use Threads">
+  - You need **I/O concurrency** — e.g., making multiple HTTP requests in parallel.
+  - You are integrating with libraries that expect OS threads (most Ruby database drivers, etc.).
+  - In MRI, threads release the GVL during I/O, so multiple threads genuinely run their I/O in parallel even without Ractors.
+</Accordion>
+
+<Accordion title="When to use Ractors">
+  - You need **true CPU parallelism** — e.g., heavy data processing, image resizing, cryptographic work.
+  - Your workload can be decomposed into isolated chunks that communicate only via message passing.
+  - You are willing to work with the constraints on object sharing.
+</Accordion>

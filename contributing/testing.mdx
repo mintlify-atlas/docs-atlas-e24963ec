@@ -1,0 +1,229 @@
+---
+title: "Testing Ruby"
+description: "How to run Ruby's test suites and write new tests."
+---
+
+All commands below assume you are running them from the `build/` directory created during [Building Ruby](/contributing/building-ruby).
+
+Most `make` targets work with GNU make (the default on Linux and macOS), BSD make, and NMAKE, except where noted.
+
+<Tip>
+  Any test target can be run in parallel with `-j`. For example, to use 8 processes:
+
+  ```bash
+  make test-all -j8
+  ```
+
+  See [Running make scripts in parallel](/contributing/building-ruby#parallel-builds) for how to set this globally.
+</Tip>
+
+## Test Suites
+
+Ruby has four main test suites.
+
+### 1. Bootstrap Tests (`bootstraptest/`)
+
+A small, fast suite that runs on [Miniruby](/contributing/building-ruby#miniruby-vs-full-ruby). This is the first sanity check after a build.
+
+```bash
+make btest
+```
+
+Run specific test files or named sets:
+
+```bash
+make btest BTESTS="../bootstraptest/test_string.rb ../bootstraptest/test_class.rb"
+make btest BTESTS="--sets=string,class"
+```
+
+Run with verbose output:
+
+```bash
+make btest OPTS="--sets=string,class -v"
+```
+
+To run the bootstrap tests on full Ruby instead of Miniruby:
+
+```bash
+make test
+```
+
+```bash
+make test OPTS=-v     # verbose
+```
+
+*(GNU make only)* Run a single file directly:
+
+```bash
+make ../test/ruby/test_string.rb
+```
+
+Filter tests by name with a regex:
+
+```bash
+make ../test/ruby/test_string.rb TESTOPTS="-n /test_.*_to_s/"
+```
+
+### 2. Full Test Suite (`test/`)
+
+The comprehensive suite that runs on full Ruby.
+
+```bash
+make test-all
+```
+
+Run a specific directory or file:
+
+```bash
+make test-all TESTS="../test/ruby/"
+make test-all TESTS="../test/ruby/test_string.rb"
+```
+
+Run a single named test:
+
+```bash
+make test-all TESTS="../test/ruby/test_string.rb --name=TestString#test_to_s"
+```
+
+Run with verbose output:
+
+```bash
+make test-all TESTS=-v
+```
+
+Show all available `TESTS` options:
+
+```bash
+make test-all TESTS=--help
+```
+
+### 3. Ruby Spec (`spec/ruby`)
+
+A mirror of [github.com/ruby/spec](https://github.com/ruby/spec) that tests Ruby language behavior.
+
+```bash
+make test-spec
+```
+
+Run a specific directory or file:
+
+```bash
+make test-spec SPECOPTS="../spec/ruby/core/string/"
+make test-spec SPECOPTS="../spec/ruby/core/string/to_s_spec.rb"
+```
+
+Filter by example name:
+
+```bash
+make test-spec SPECOPTS="../spec/ruby/core/string/to_s_spec.rb --example='returns self when self.class == String'"
+```
+
+Run with verbose output:
+
+```bash
+make test-spec SPECOPTS="../spec/ruby/core/string/to_s_spec.rb -Vfs"
+```
+
+*(GNU make only)* Run a spec file directly:
+
+```bash
+make ../spec/ruby/core/string/to_s_spec.rb
+```
+
+### 4. Bundler Specs (`spec/bundler`)
+
+A mirror of the bundler specs from [rubygems/rubygems](https://github.com/rubygems/rubygems/tree/master/bundler/spec).
+
+```bash
+make test-bundler
+```
+
+Run a specific bundler spec file:
+
+```bash
+make test-bundler BUNDLER_SPECS=commands/exec_spec.rb
+```
+
+## Running the Full Check
+
+To run all suites — `test/`, `bootstraptest/`, and `spec/` — together:
+
+```bash
+make check
+```
+
+This is the same command CI runs. Use it before submitting a pull request.
+
+## Quick Reference
+
+| Command | Suite | Runs on |
+|---|---|---|
+| `make btest` | `bootstraptest/` | Miniruby |
+| `make test` | `bootstraptest/` | Full Ruby |
+| `make test-all` | `test/` | Full Ruby |
+| `make test-spec` | `spec/ruby` | Full Ruby |
+| `make test-bundler` | `spec/bundler` | Full Ruby |
+| `make check` | All of the above | Full Ruby |
+
+## Writing Tests
+
+### bootstraptest
+
+Bootstrap tests live in `bootstraptest/` and use a simple assertion DSL. Each file covers a single topic (strings, classes, blocks, etc.):
+
+```ruby
+assert_equal "hello", "'hello'"
+assert_equal 3, "1 + 2"
+```
+
+These tests run on Miniruby, so they must not depend on any extension libraries.
+
+### test-unit (test/)
+
+Tests in `test/` use Ruby's built-in `Test::Unit` framework:
+
+```ruby
+require "test/unit"
+
+class TestMyFeature < Test::Unit::TestCase
+  def test_basic_behavior
+    assert_equal "HELLO", "hello".upcase
+  end
+
+  def test_raises_on_bad_input
+    assert_raise(ArgumentError) { Integer("not a number") }
+  end
+end
+```
+
+Place new files under `test/ruby/` for core Ruby tests or the appropriate subdirectory for extension tests.
+
+### ruby/spec
+
+Specs in `spec/ruby` use [MSpec](https://github.com/ruby/mspec) syntax:
+
+```ruby
+describe String do
+  describe "#upcase" do
+    it "returns an uppercased copy" do
+      "hello".upcase.should == "HELLO"
+    end
+  end
+end
+```
+
+<Note>
+  The `spec/ruby` directory is a read-only mirror. To contribute ruby/spec tests, open a pull request at [github.com/ruby/spec](https://github.com/ruby/spec) instead.
+</Note>
+
+## Troubleshooting
+
+### Failing Tests on s390x (zlib)
+
+On s390x CPUs, some tests may fail due to a zlib patch that produces a different compressed byte stream. Work around this by disabling hardware compression:
+
+```bash
+DFLTCC=0 make check
+```
+
+See [Bug #19909](https://bugs.ruby-lang.org/issues/19909) for details.

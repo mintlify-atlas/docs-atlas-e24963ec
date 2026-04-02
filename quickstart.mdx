@@ -1,80 +1,250 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick start"
+description: "Write and run your first Ruby program in minutes."
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+You need Ruby installed on your system. If you haven't done that yet, see the [Installation guide](/installation).
 
-### Step 1: Set up your local environment
+Verify your installation before continuing:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+```bash
+ruby --version
+# ruby 3.x.x (2024-xx-xx revision ...) [x86_64-linux]
+```
 
-### Step 2: Deploy your changes
+## Your first Ruby program
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Create a file">
+    Create a file named `hello.rb` with the following content:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```ruby hello.rb
+    puts "Hello, World!"
+    ```
+  </Step>
+  <Step title="Run it">
+    Execute the file with the `ruby` command:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    ruby hello.rb
+    ```
+  </Step>
+  <Step title="See the output">
+    You should see:
 
-### Step 3: Go live
+    ```
+    Hello, World!
+    ```
+  </Step>
+</Steps>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+## Try Ruby interactively
+
+`irb` (Interactive Ruby) lets you evaluate Ruby expressions immediately without creating a file. It is the fastest way to experiment with the language.
+
+```bash
+irb
+```
+
+```ruby
+irb(main):001> 1 + 2
+=> 3
+irb(main):002> "hello".upcase
+=> "HELLO"
+irb(main):003> [1, 2, 3].map { |n| n * 2 }
+=> [2, 4, 6]
+```
+
+Type `exit` or press `Ctrl+D` to quit.
+
+<Tip>
+  `irb` supports tab completion and multi-line input. It is useful for checking method names, testing small snippets, and exploring the standard library.
+</Tip>
+
+## Core language concepts
+
+### Strings
+
+Strings in Ruby can be delimited with single or double quotes. Double-quoted strings support interpolation with `#{}`.
+
+```ruby
+name = "Alice"
+puts "Hello, #{name}!"        # => Hello, Alice!
+puts 'Hello, #{name}!'        # => Hello, #{name}!  (no interpolation)
+
+puts "ruby".length            # => 4
+puts "ruby".upcase            # => RUBY
+puts "  trim me  ".strip      # => trim me
+puts "ha" * 3                 # => hahaha
+```
+
+### Numbers
+
+```ruby
+puts 10 + 3     # => 13
+puts 10 - 3     # => 7
+puts 10 * 3     # => 30
+puts 10 / 3     # => 3   (integer division)
+puts 10.0 / 3   # => 3.3333333333333335
+puts 10 % 3     # => 1   (modulo)
+puts 2 ** 10    # => 1024
+
+puts 42.class        # => Integer
+puts 3.14.class      # => Float
+puts 42.to_f         # => 42.0
+puts 3.14.to_i       # => 3
+```
+
+### Arrays
+
+Arrays are ordered, indexed collections of any objects.
+
+```ruby
+fruits = ["apple", "banana", "cherry"]
+
+puts fruits[0]        # => apple
+puts fruits[-1]       # => cherry
+puts fruits.length    # => 3
+
+fruits.push("date")
+puts fruits.inspect   # => ["apple", "banana", "cherry", "date"]
+
+fruits.each do |fruit|
+  puts fruit
+end
+
+doubled = [1, 2, 3].map { |n| n * 2 }
+puts doubled.inspect  # => [2, 4, 6]
+
+evens = [1, 2, 3, 4, 5].select { |n| n.even? }
+puts evens.inspect    # => [2, 4]
+```
+
+### Hashes
+
+Hashes store key-value pairs. Symbol keys (`:name`) are the most common convention.
+
+```ruby
+person = { name: "Alice", age: 30, city: "London" }
+
+puts person[:name]    # => Alice
+puts person[:age]     # => 30
+
+person[:email] = "alice@example.com"
+
+person.each do |key, value|
+  puts "#{key}: #{value}"
+end
+# => name: Alice
+# => age: 30
+# => city: London
+# => email: alice@example.com
+
+puts person.keys.inspect    # => [:name, :age, :city, :email]
+puts person.values.inspect  # => ["Alice", 30, "London", "alice@example.com"]
+```
+
+### Blocks and iterators
+
+Blocks are anonymous chunks of code passed to methods using `do...end` or `{}`. They are central to Ruby's iterator pattern.
+
+```ruby
+# do...end style (common for multi-line blocks)
+3.times do |i|
+  puts "iteration #{i}"
+end
+# => iteration 0
+# => iteration 1
+# => iteration 2
+
+# Brace style (common for single-line blocks)
+[1, 2, 3].each { |n| puts n }
+
+# Transforming with map
+squares = (1..5).map { |n| n ** 2 }
+puts squares.inspect  # => [1, 4, 9, 16, 25]
+
+# Accumulating with reduce
+sum = [1, 2, 3, 4, 5].reduce(0) { |total, n| total + n }
+puts sum  # => 15
+```
+
+### Classes
+
+Ruby is fully object-oriented. You define behavior with classes, and all instances share the class's methods.
+
+```ruby
+class Animal
+  def initialize(name, sound)
+    @name  = name
+    @sound = sound
+  end
+
+  def speak
+    "#{@name} says #{@sound}!"
+  end
+end
+
+class Dog < Animal
+  def initialize(name)
+    super(name, "woof")
+  end
+
+  def fetch(item)
+    "#{@name} fetches the #{item}."
+  end
+end
+
+dog = Dog.new("Rex")
+puts dog.speak          # => Rex says woof!
+puts dog.fetch("ball")  # => Rex fetches the ball.
+```
+
+### Exception handling
+
+Use `begin`/`rescue`/`ensure` to handle errors gracefully.
+
+```ruby
+begin
+  result = 10 / 0
+rescue ZeroDivisionError => e
+  puts "Caught an error: #{e.message}"
+ensure
+  puts "This always runs."
+end
+# => Caught an error: divided by 0
+# => This always runs.
+```
+
+## Running a Ruby script with arguments
+
+Ruby exposes command-line arguments through the `ARGV` array:
+
+```ruby script.rb
+name = ARGV[0] || "World"
+puts "Hello, #{name}!"
+```
+
+```bash
+ruby script.rb Alice
+# => Hello, Alice!
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Language reference" icon="book" href="/language/syntax">
+    Full coverage of Ruby syntax: variables, control flow, methods, and more.
+  </Card>
+  <Card title="Core classes" icon="cube" href="/core/string">
+    Detailed reference for String, Array, Hash, Integer, and other built-in types.
+  </Card>
+  <Card title="Standard library" icon="box" href="/stdlib/overview">
+    Networking, JSON, date handling, and other libraries bundled with Ruby.
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up Ruby with a version manager for easier upgrades.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

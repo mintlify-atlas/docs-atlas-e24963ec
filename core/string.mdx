@@ -1,0 +1,356 @@
+---
+title: "String"
+description: "Ruby's String class — text manipulation, searching, formatting, and encoding."
+---
+
+`String` objects hold arbitrary sequences of bytes, typically representing text. Every string in Ruby is an instance of the `String` class and carries its own encoding.
+
+## Creating strings
+
+<Tabs>
+  <Tab title="Literals">
+    ```ruby
+    # Double-quoted: supports interpolation and escape sequences
+    name = "world"
+    greeting = "Hello, #{name}!"   # => "Hello, world!"
+    tab_line = "column1\tcolumn2"  # \t, \n, \\ etc. are interpreted
+
+    # Single-quoted: almost no escape processing, no interpolation
+    raw = 'No #{interpolation} here'  # => "No \#{interpolation} here"
+    path = 'C:\Users\alice'           # backslash is literal
+
+    # Concatenation
+    s = "foo" + "bar"   # => "foobar"
+    s = "foo" "bar"     # adjacent literals merge at parse time => "foobar"
+    ```
+  </Tab>
+  <Tab title="Heredoc">
+    ```ruby
+    # <<~HEREDOC strips leading whitespace (squiggly heredoc)
+    message = <<~HEREDOC
+      Dear #{name},
+
+      Thanks for your interest.
+    HEREDOC
+    # => "Dear world,\n\nThanks for your interest.\n"
+
+    # <<HEREDOC (no tilde) preserves all indentation
+    sql = <<SQL
+      SELECT *
+      FROM users
+    SQL
+
+    # Single-quoted heredoc: no interpolation
+    literal = <<~'HEREDOC'
+      No #{interpolation} processed here.
+    HEREDOC
+    ```
+  </Tab>
+  <Tab title="% literals">
+    ```ruby
+    # %Q{} — equivalent to double-quoted string
+    s = %Q{Hello, #{name}!}   # => "Hello, world!"
+    s = %{Hello, #{name}!}    # shorthand (% alone also works)
+
+    # %q{} — equivalent to single-quoted string
+    s = %q{No #{interpolation}}  # => "No \#{interpolation}"
+
+    # Delimiters can be any matched pair: (), [], {}, ||, !!
+    s = %q(parens work too)
+    s = %q|pipes too|
+    ```
+  </Tab>
+  <Tab title="String.new">
+    ```ruby
+    # Creates a mutable, unfrozen string regardless of frozen_string_literal
+    s = String.new("hello")
+
+    # With encoding specified
+    s = String.new("hello", encoding: "UTF-8")
+    ```
+  </Tab>
+</Tabs>
+
+## String interpolation
+
+Any Ruby expression can appear inside `#{}` within a double-quoted string or heredoc:
+
+```ruby
+x = 42
+"The answer is #{x}"              # => "The answer is 42"
+"Sum: #{1 + 2 + 3}"               # => "Sum: 6"
+"Upcased: #{"hello".upcase}"      # => "Upcased: HELLO"
+"pi ≈ #{Math::PI.round(4)}"       # => "pi ≈ 3.1416"
+
+# Multiline expressions work too
+result = "Items: #{
+  [1, 2, 3].map { |n| n * 2 }.join(", ")
+}"
+# => "Items: 2, 4, 6"
+```
+
+<Note>
+  Single-quoted strings and `%q{}` literals do not interpolate — `#{}` is treated as literal text.
+</Note>
+
+## Case methods
+
+```ruby
+s = "Hello, World!"
+
+s.upcase      # => "HELLO, WORLD!"
+s.downcase    # => "hello, world!"
+s.capitalize  # => "Hello, world!"   (first char up, rest down)
+s.swapcase    # => "hELLO, wORLD!"
+
+# Bang variants mutate the receiver
+s.upcase!     # modifies s in place, returns s or nil if no change
+```
+
+## Searching
+
+```ruby
+s = "the quick brown fox"
+
+s.include?("quick")       # => true
+s.start_with?("the")      # => true
+s.end_with?("fox")        # => true
+s.start_with?("the", "a") # => true  (accepts multiple args)
+
+s.index("o")              # => 12  (first occurrence)
+s.rindex("o")             # => 17  (last occurrence)
+s.index("o", 13)          # => 17  (search from offset 13)
+s.index(/br\w+/)          # => 10  (regex search)
+
+s.count("aeiou")          # => 5   (count matching chars)
+```
+
+### Pattern matching with `match`
+
+```ruby
+s = "Order #1042 placed on 2024-03-15"
+
+# match returns a MatchData object, or nil
+md = s.match(/(\d{4})-(\d{2})-(\d{2})/)
+md[0]   # => "2024-03-15"  (full match)
+md[1]   # => "2024"        (first capture)
+md[2]   # => "03"
+md[3]   # => "15"
+
+# match? returns true/false without setting $~ (faster)
+s.match?(/\d{4}-\d{2}-\d{2}/)  # => true
+
+# =~ operator: returns position or nil, sets $~
+if s =~ /Order #(\d+)/
+  $1     # => "1042"
+  $~[0]  # => "Order #1042"
+end
+```
+
+## Transformation
+
+<CodeGroup>
+
+```ruby gsub and sub
+s = "hello world"
+
+# sub: replace first match
+s.sub("l", "r")          # => "herlo world"
+s.sub(/[aeiou]/, "*")    # => "h*llo world"
+
+# gsub: replace all matches
+s.gsub("l", "r")         # => "herro worrd"
+s.gsub(/[aeiou]/, "*")   # => "h*ll* w*rld"
+
+# gsub with block: yielded the matched string
+s.gsub(/\w+/) { |w| w.capitalize }
+# => "Hello World"
+
+# gsub with hash: maps matches to replacements
+s.gsub(/[aeiou]/, "a" => "@", "e" => "3", "o" => "0")
+# => "h3ll0 w0rld"
+
+# Back-references in replacement string
+"John Smith".sub(/(\w+) (\w+)/, '\2, \1')
+# => "Smith, John"
+```
+
+```ruby tr, squeeze, delete
+# tr: transliterate characters (like Unix tr)
+"hello".tr("aeiou", "*")     # => "h*ll*"
+"hello".tr("a-y", "b-z")     # => "ifmmp"  (shift by 1)
+"hello".tr("^aeiou", "*")    # => "*e**o"  (complement)
+
+# squeeze: collapse consecutive duplicate chars
+"aaabbbccc".squeeze          # => "abc"
+"aaabbbccc".squeeze("a")     # => "abbbccc"
+"  hello   ".squeeze(" ")    # => " hello "
+
+# delete: remove matching chars
+"hello".delete("l")          # => "heo"
+"hello world".delete("a-e")  # => "hllo worl"
+```
+
+```ruby strip and chomp
+s = "  hello world  "
+s.strip    # => "hello world"   (remove leading+trailing whitespace)
+s.lstrip   # => "hello world  " (leading only)
+s.rstrip   # => "  hello world" (trailing only)
+
+# chomp: remove trailing record separator (\n, \r\n, \r)
+"hello\n".chomp    # => "hello"
+"hello\r\n".chomp  # => "hello"
+"hello".chomp      # => "hello"  (no change)
+"hello".chomp("o") # => "hell"   (custom separator)
+
+# chop: unconditionally remove last character (or \r\n)
+"hello\n".chop  # => "hello"
+"hello".chop    # => "hell"
+```
+
+</CodeGroup>
+
+## Splitting and joining
+
+```ruby
+s = "one two three"
+
+# split by string or regex
+s.split(" ")           # => ["one", "two", "three"]
+s.split(/\s+/)         # => ["one", "two", "three"]
+s.split(" ", 2)        # => ["one", "two three"]  (limit)
+"a,,b".split(",")      # => ["a", "", "b"]
+"a,,b".split(",", -1)  # => ["a", "", "b"]  (-1 keeps trailing empty)
+
+# chars, bytes, lines
+"héllo".chars          # => ["h", "é", "l", "l", "o"]
+"hi".bytes             # => [104, 105]
+"line1\nline2\n".lines # => ["line1\n", "line2\n"]
+
+# each_line: iterate without building an array
+"line1\nline2\n".each_line { |l| puts l.chomp }
+
+# join is on Array:
+["one", "two", "three"].join(", ")  # => "one, two, three"
+```
+
+## Formatting
+
+```ruby
+# Padding and alignment
+"hi".center(10)         # => "    hi    "
+"hi".center(10, "-")    # => "----hi----"
+"hi".ljust(10)          # => "hi        "
+"hi".rjust(10)          # => "        hi"
+"hi".rjust(10, "0")     # => "00000000hi"
+
+# sprintf-style formatting via %
+"Hello, %s! You are %d years old." % ["Alice", 30]
+# => "Hello, Alice! You are 30 years old."
+
+"Pi is approximately %.4f" % Math::PI
+# => "Pi is approximately 3.1416"
+
+"%08.2f" % 3.14  # => "00003.14"
+
+# Kernel#format / Kernel#sprintf are equivalent
+format("%-10s %5d", "item", 42)  # => "item           42"
+```
+
+## Inspection
+
+```ruby
+s = "Hello, world!"
+
+s.length   # => 13
+s.size     # => 13   (alias)
+s.bytesize # => 13   (byte count, differs for multibyte chars)
+s.empty?   # => false
+"".empty?  # => true
+
+s.encoding            # => #<Encoding:UTF-8>
+s.valid_encoding?     # => true
+
+s.inspect  # => "\"Hello, world!\""  (escaped representation)
+s.dump     # => "\"Hello, world!\""  (similar, always ASCII-safe)
+
+# Checking character content
+"123".match?(/\A\d+\z/)  # => true
+"abc".chars.all? { |c| c =~ /[a-z]/ }  # => true
+```
+
+## String comparison and ordering
+
+```ruby
+"apple" == "apple"   # => true
+"apple" == "Apple"   # => false
+"apple".eql?("apple")  # => true  (type + value check)
+
+# <=> (spaceship): returns -1, 0, or 1
+"apple" <=> "banana"  # => -1
+"banana" <=> "apple"  # => 1
+"apple" <=> "apple"   # => 0
+
+# Strings are comparable
+["banana", "apple", "cherry"].sort   # => ["apple", "banana", "cherry"]
+"apple" < "banana"   # => true
+"zoo" > "ant"        # => true
+
+# Case-insensitive comparison
+"Apple".casecmp("apple")   # => 0
+"Apple".casecmp?("apple")  # => true
+```
+
+## Frozen strings
+
+By default, every string literal creates a new, mutable `String` object. Adding a magic comment at the top of a file freezes all string literals in that file, preventing mutation and reducing object allocation:
+
+```ruby
+# frozen_string_literal: true
+
+s = "hello"
+s.frozen?   # => true
+s << " world"
+# => FrozenError: can't modify frozen String: "hello"
+
+# Use String.new or .dup to get a mutable copy
+mutable = String.new("hello")
+mutable << " world"   # => "hello world"
+
+also_mutable = "hello".dup
+also_mutable << " world"  # => "hello world"
+```
+
+<Tip>
+  Enable `# frozen_string_literal: true` in all new Ruby files. It reduces garbage collection pressure and makes string-sharing optimizations possible. Rails applications benefit noticeably at scale.
+</Tip>
+
+## Encoding
+
+```ruby
+# Strings carry an encoding
+"hello".encoding               # => #<Encoding:UTF-8>
+"hello".encode("ISO-8859-1").encoding  # => #<Encoding:ISO-8859-1>
+
+# List available encodings
+Encoding.list.map(&:name).first(5)
+# => ["ASCII-8BIT", "UTF-8", "US-ASCII", "UTF-16BE", ...]
+
+# Convert encoding
+s = "café"
+s.encoding         # => #<Encoding:UTF-8>
+latin = s.encode("ISO-8859-1")
+latin.encoding     # => #<Encoding:ISO-8859-1>
+back = latin.encode("UTF-8")
+
+# Force encoding without conversion (reinterpret bytes)
+bytes = "\xc3\xa9"  # UTF-8 bytes for "é"
+bytes.force_encoding("UTF-8")   # => "é"
+
+# b: return ASCII-8BIT copy
+"hello".b.encoding  # => #<Encoding:ASCII-8BIT>
+```
+
+<Note>
+  Ruby uses UTF-8 as the default source encoding. Binary strings (e.g., from file reads in binary mode) use `ASCII-8BIT` (also called `BINARY`).
+</Note>

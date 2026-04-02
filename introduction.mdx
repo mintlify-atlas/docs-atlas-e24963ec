@@ -1,0 +1,102 @@
+---
+title: "Introduction to Ruby"
+description: "Ruby is a dynamic, object-oriented programming language designed for programmer happiness and productivity."
+---
+
+## What is Ruby?
+
+Ruby is an interpreted, object-oriented programming language often used for web development. It also offers many scripting features to process plain text and serialized files, or manage system tasks. It is simple, straightforward, and extensible.
+
+Ruby was originally designed and developed by Yukihiro Matsumoto (Matz) in 1995. Matz's guiding principle was to optimize for developer happiness — the language should feel natural and fun to write, not a chore. This philosophy permeates Ruby's design: code reads almost like English prose, and the language trusts programmers to make their own decisions.
+
+> "I hope to see Ruby help every programmer in the world to be productive, and to enjoy programming, and to be happy." — Matz
+
+## Key features
+
+Ruby combines simplicity with power, drawing from Lisp, Smalltalk, and Perl while remaining uniquely expressive.
+
+**Simple syntax**
+Ruby's syntax is clean and readable. There are no mandatory type declarations, semicolons, or curly braces delimiting blocks. Whitespace and `end` keywords structure code naturally.
+
+**Object-oriented throughout**
+Everything in Ruby is an object, including integers and `nil`. Ruby supports standard OOP features — classes, inheritance, method calls — as well as advanced features like mixins via modules and singleton methods on individual objects.
+
+**Mixins**
+Ruby uses modules as mixins instead of multiple inheritance. You can include a module's methods into any class, enabling clean code sharing without the complexity of multiple class hierarchies. The built-in `Enumerable` and `Comparable` modules are widely used examples.
+
+**Operator overloading**
+Operators in Ruby are methods. You can define `+`, `-`, `==`, `<=>`, and others on your own classes to make them behave naturally alongside built-in types.
+
+**Exception handling**
+Ruby provides a structured `begin`/`rescue`/`ensure` mechanism for handling exceptions. You can raise and rescue specific exception classes, and the `ensure` block always runs for cleanup.
+
+**Iterators and closures**
+Blocks, procs, and lambdas are first-class in Ruby. The `yield` keyword lets any method accept a block of code, enabling clean iterators like `each`, `map`, and `select` without special language syntax.
+
+**Garbage collection**
+Ruby manages memory automatically. The runtime tracks object lifetimes and reclaims memory for unreachable objects, so you never call `free` or manage allocations manually.
+
+**Highly portable**
+Ruby runs on many Unix-like and POSIX-compatible platforms, as well as Windows and macOS. The MRI (Matz's Ruby Interpreter, also called CRuby) is the reference implementation, with JRuby (JVM) and TruffleRuby as alternative runtimes.
+
+## Ruby's philosophy
+
+Matz designed Ruby around the principle of least surprise: code should behave the way an experienced programmer expects. This means:
+
+- **Consistency**: methods work the same way across all objects.
+- **Expressiveness**: there is usually more than one way to write something, letting you choose the style that reads best.
+- **Freedom with trust**: Ruby does not force safety constraints on you; it assumes you know what you are doing.
+
+The language has evolved through major versions — Ruby 1.8, 1.9, 2.x, 3.x — continuously improving performance and adding features like pattern matching, Ractors for concurrency, and YJIT (a just-in-time compiler). Ruby 4.x is now under active development.
+
+## A taste of Ruby
+
+The following example shows Ruby's expressiveness in a few lines:
+
+```ruby hello.rb
+# Everything is an object
+puts 42.class          # => Integer
+puts "hello".upcase    # => HELLO
+
+# Blocks and iterators
+[1, 2, 3].each do |n|
+  puts n * 2
+end
+# => 2
+# => 4
+# => 6
+
+# Hashes and symbols
+person = { name: "Alice", age: 30 }
+puts "#{person[:name]} is #{person[:age]} years old."
+# => Alice is 30 years old.
+
+# Classes and mixins
+class Greeter
+  def initialize(name)
+    @name = name
+  end
+
+  def greet
+    "Hello, #{@name}!"
+  end
+end
+
+puts Greeter.new("World").greet
+# => Hello, World!
+```
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Write and run your first Ruby program in minutes.
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install Ruby on macOS, Linux, or Windows.
+  </Card>
+  <Card title="Language reference" icon="book" href="/language/syntax">
+    Explore Ruby's syntax, classes, exceptions, and more.
+  </Card>
+  <Card title="Core classes" icon="cube" href="/core/string">
+    String, Array, Hash, Integer, and other built-in types.
+  </Card>
+</CardGroup>

@@ -1,0 +1,369 @@
+---
+title: "Utility Libraries"
+description: "Commonly used utility libraries bundled with Ruby."
+---
+
+Ruby's standard library includes a set of utility modules that cover the most common day-to-day programming needs: serialisation, templating, file management, random token generation, path manipulation, and concurrency control. All of them are available with a single `require`.
+
+## JSON
+
+`JSON` is implemented as a C extension and is always available. Use it to parse JSON strings into Ruby objects and to serialise Ruby objects back to JSON.
+
+<AccordionGroup>
+  <Accordion title="Parsing JSON">
+
+```ruby
+require 'json'
+
+text = '{"name":"Alice","age":30,"active":true}'
+data = JSON.parse(text)
+
+data['name']    # => "Alice"
+data['age']     # => 30
+data['active']  # => true
+```
+
+By default, keys are strings. Pass `symbolize_names: true` to get symbol keys:
+
+```ruby
+data = JSON.parse(text, symbolize_names: true)
+data[:name]  # => "Alice"
+```
+
+  </Accordion>
+  <Accordion title="Generating JSON">
+
+```ruby
+require 'json'
+
+# From a Hash
+hash = { name: 'Alice', scores: [42, 99], active: true }
+JSON.generate(hash)
+# => '{"name":"Alice","scores":[42,99],"active":true}'
+
+# Pretty-printed output
+puts JSON.pretty_generate(hash)
+# {
+#   "name": "Alice",
+#   "scores": [
+#     42,
+#     99
+#   ],
+#   "active": true
+# }
+```
+
+Any Ruby object that responds to `to_json` can also be serialised directly:
+
+```ruby
+{ city: 'Tokyo', pop: 13_960_000 }.to_json
+# => '{"city":"Tokyo","pop":13960000}'
+```
+
+  </Accordion>
+</AccordionGroup>
+
+## YAML
+
+`YAML` wraps the Psych library (a C extension built on libyaml). It supports loading configuration files and serialising Ruby objects.
+
+<AccordionGroup>
+  <Accordion title="Loading YAML">
+
+```ruby
+require 'yaml'
+
+text = <<~YAML
+  name: Alice
+  scores:
+    - 42
+    - 99
+  active: true
+YAML
+
+data = YAML.safe_load(text)
+data['name']    # => "Alice"
+data['scores']  # => [42, 99]
+data['active']  # => true
+```
+
+  </Accordion>
+  <Accordion title="Dumping YAML">
+
+```ruby
+require 'yaml'
+
+hash = { name: 'Alice', scores: [42, 99] }
+puts YAML.dump(hash)
+# ---
+# :name: Alice
+# :scores:
+# - 42
+# - 99
+```
+
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Use `YAML.safe_load` instead of `YAML.load` for any untrusted input. `YAML.load` can deserialise arbitrary Ruby objects, which is a remote code execution vulnerability when processing user-supplied YAML. `YAML.safe_load` restricts deserialization to basic types (String, Integer, Float, Array, Hash, etc.).
+</Warning>
+
+## ERB
+
+ERB (Embedded Ruby) is Ruby's built-in templating engine. It evaluates `<%= %>` expressions and `<% %>` statements inside a template string and returns the rendered output.
+
+<AccordionGroup>
+  <Accordion title="Rendering a template">
+
+```ruby
+require 'erb'
+
+template = ERB.new(<<~TMPL)
+  Hello, <%= name %>!
+  Your scores are: <%= scores.join(', ') %>
+  <% if scores.max >= 90 %>
+  Excellent work!
+  <% end %>
+TMPL
+
+name   = 'Alice'
+scores = [42, 99]
+
+puts template.result(binding)
+# Hello, Alice!
+# Your scores are: 42, 99
+# Excellent work!
+```
+
+  </Accordion>
+  <Accordion title="Rendering from a file">
+
+```ruby
+require 'erb'
+
+# Load a .erb template file from disk
+source   = File.read('report.html.erb')
+template = ERB.new(source)
+
+# Supply variables via a Binding object
+context = OpenStruct.new(title: 'Q1 Report', rows: [['Alice', 99], ['Bob', 84]])
+output  = template.result(context.instance_eval { binding })
+
+File.write('report.html', output)
+```
+
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Pass `trim_mode: '-'` to `ERB.new` to suppress blank lines produced by `<% %>` tags, which gives cleaner output in text and HTML templates.
+</Tip>
+
+## FileUtils
+
+`FileUtils` provides shell-like methods for file and directory operations. All methods are available as module functions — you can call them on the module directly or `include FileUtils` in a class.
+
+<AccordionGroup>
+  <Accordion title="Copying and moving files">
+
+```ruby
+require 'fileutils'
+
+FileUtils.cp('src/app.rb', 'dst/app.rb')
+FileUtils.cp_r('src/', 'dst/')           # recursive copy
+
+FileUtils.mv('old_name.txt', 'new_name.txt')
+FileUtils.mv('logs/', '/var/log/myapp/') # move a directory
+```
+
+  </Accordion>
+  <Accordion title="Creating and removing directories">
+
+```ruby
+require 'fileutils'
+
+FileUtils.mkdir('output')
+FileUtils.mkdir_p('a/b/c/d')  # creates all intermediate directories
+
+FileUtils.rm('stale.log')
+FileUtils.rm_rf('tmp/')       # remove directory tree, no error if missing
+```
+
+  </Accordion>
+  <Accordion title="Permissions and ownership">
+
+```ruby
+require 'fileutils'
+
+FileUtils.chmod(0o755, 'bin/server')
+FileUtils.chmod_R(0o644, 'public/')  # recursive
+
+FileUtils.touch('tmp/restart.txt')   # create or update mtime
+```
+
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  `FileUtils.rm_rf` deletes silently and recursively. Double-check the path before calling it — there is no undo.
+</Warning>
+
+## Tempfile
+
+`Tempfile` creates temporary files in the OS temp directory. The file is automatically deleted when the `Tempfile` object is closed and finalised, or when you call `#unlink` explicitly.
+
+```ruby
+require 'tempfile'
+
+Tempfile.create('my-prefix') do |f|
+  f.write("temporary content\n")
+  f.flush
+
+  puts f.path   # e.g. /tmp/my-prefix20240102-12345-abcdef
+  puts File.read(f.path)
+end
+# File is deleted automatically after the block exits
+```
+
+For manual lifecycle management:
+
+```ruby
+require 'tempfile'
+
+tmp = Tempfile.new(['report', '.csv'])
+tmp.write("col1,col2\n1,2\n")
+tmp.close
+
+# ... hand tmp.path to another process ...
+
+tmp.unlink  # delete when done
+```
+
+<Note>
+  Always prefer the block form (`Tempfile.create { }`) over manual `Tempfile.new` to ensure the file is cleaned up even if an exception is raised.
+</Note>
+
+## SecureRandom
+
+`SecureRandom` provides cryptographically secure random values suitable for tokens, session IDs, and API keys. It delegates to the OS entropy source (`/dev/urandom` on Unix, `CryptGenRandom` on Windows).
+
+```ruby
+require 'securerandom'
+
+SecureRandom.hex(16)
+# => "3c45f8b2e1a7d609c4b5e2f1a8d3c6e0"  (32 hex chars = 16 bytes)
+
+SecureRandom.uuid
+# => "550e8400-e29b-41d4-a716-446655440000"
+
+SecureRandom.base64(24)
+# => "dGhlIHF1aWNrIGJyb3duIGZveA=="
+
+SecureRandom.random_bytes(12)
+# => "\xA3\x1F..." (12 raw random bytes)
+
+SecureRandom.random_number(100)
+# => 73  (integer in range 0...100)
+```
+
+<Tip>
+  For URL-safe tokens (no `+` or `/` characters), use `SecureRandom.urlsafe_base64(n)`.
+</Tip>
+
+## Pathname
+
+`Pathname` wraps a filesystem path in an object, letting you compose and inspect paths with method calls instead of string concatenation.
+
+<AccordionGroup>
+  <Accordion title="Building and navigating paths">
+
+```ruby
+require 'pathname'
+
+base = Pathname.new('/var/log/myapp')
+
+log_file = base / 'production.log'
+# => #<Pathname:/var/log/myapp/production.log>
+
+log_file.to_s       # => "/var/log/myapp/production.log"
+log_file.dirname    # => #<Pathname:/var/log/myapp>
+log_file.basename   # => #<Pathname:production.log>
+log_file.extname    # => ".log"
+log_file.exist?     # => true / false
+log_file.file?      # => true / false
+log_file.directory? # => false
+```
+
+  </Accordion>
+  <Accordion title="Reading and writing files">
+
+```ruby
+require 'pathname'
+
+config = Pathname.new('config/settings.yml')
+
+# Read
+content = config.read
+# Identical to File.read('config/settings.yml')
+
+# Write
+config.write("key: value\n")
+
+# Iterate lines
+config.each_line { |line| puts line }
+```
+
+  </Accordion>
+  <Accordion title="Traversing directories">
+
+```ruby
+require 'pathname'
+
+src = Pathname.new('lib')
+
+src.children.each { |p| puts p }       # immediate children
+src.glob('**/*.rb').each { |p| puts p } # recursive glob
+src.find { |p| puts p if p.file? }     # find all files
+```
+
+  </Accordion>
+</AccordionGroup>
+
+## Timeout
+
+`Timeout` lets you abort any block of code that runs longer than a specified number of seconds.
+
+```ruby
+require 'timeout'
+
+begin
+  result = Timeout.timeout(5) do
+    # Simulate a slow operation
+    sleep 10
+    'done'
+  end
+rescue Timeout::Error => e
+  puts "Operation timed out: #{e.message}"
+end
+```
+
+You can pass a custom exception class and message to distinguish timeouts from other errors:
+
+```ruby
+require 'timeout'
+
+class DatabaseTimeout < StandardError; end
+
+begin
+  Timeout.timeout(3, DatabaseTimeout, 'DB query exceeded 3 seconds') do
+    # ... run query ...
+  end
+rescue DatabaseTimeout => e
+  puts e.message
+end
+```
+
+<Warning>
+  `Timeout` works by raising an exception in the timed thread. It cannot interrupt C-level blocking calls (such as some IO operations in native extensions). For network code, prefer setting socket timeouts via `Net::HTTP` options (`open_timeout`, `read_timeout`) instead of wrapping the call in `Timeout.timeout`.
+</Warning>

@@ -1,0 +1,111 @@
+{
+  "projectType": "general",
+  "projectName": "Ruby",
+  "projectDescription": "Ruby is a dynamic, object-oriented programming language designed for developer happiness and productivity, featuring elegant syntax, powerful metaprogramming, and a rich standard library.",
+  "theme": "maple",
+  "primaryColor": "#a41610",
+  "lightColor": "#d68285",
+  "darkColor": "#cf2320",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Language Reference",
+            "pages": [
+              "language/syntax",
+              "language/classes-and-modules",
+              "language/exceptions",
+              "language/fibers-and-concurrency",
+              "language/globals"
+            ]
+          },
+          {
+            "group": "Core Classes",
+            "pages": [
+              "core/string",
+              "core/array-and-hash",
+              "core/numeric",
+              "core/io-and-file",
+              "core/regexp"
+            ]
+          },
+          {
+            "group": "Standard Library",
+            "pages": [
+              "stdlib/overview",
+              "stdlib/networking",
+              "stdlib/utilities"
+            ]
+          },
+          {
+            "group": "Performance",
+            "pages": [
+              "performance/yjit",
+              "performance/gc"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Contributing",
+        "groups": [
+          {
+            "group": "Getting Involved",
+            "pages": [
+              "contributing/overview",
+              "contributing/building-ruby",
+              "contributing/testing",
+              "contributing/making-changes"
+            ]
+          },
+          {
+            "group": "Internals",
+            "pages": [
+              "contributing/vm-internals",
+              "contributing/documentation-guide"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Dynamic, object-oriented language with elegant and expressive syntax",
+    "Everything is an object — including numbers, strings, and nil",
+    "Powerful metaprogramming with open classes and mixins",
+    "YJIT (Yet Another JIT) and ZJIT compilers for high-performance execution",
+    "Ractors for true parallel execution without shared-state threading concerns",
+    "Fibers and async I/O via the Scheduler interface",
+    "Rich standard library including HTTP, JSON, YAML, ERB, and more",
+    "Garbage collection with incremental and major GC strategies",
+    "Prism: a portable, error-tolerant parser for Ruby",
+    "Cross-platform support: Linux, macOS, Windows, and WebAssembly"
+  ],
+  "publicApiSurface": [
+    "String — text manipulation methods (gsub, split, match, format, encode)",
+    "Array — ordered collection methods (map, select, reduce, flatten, zip)",
+    "Hash — key-value store methods (merge, fetch, transform_keys, each)",
+    "Integer / Float / Numeric — arithmetic, conversion, iteration",
+    "Regexp — pattern matching and capture groups",
+    "IO / File — reading, writing, streaming, file system operations",
+    "Enumerable — map, select, reject, each_with_object, group_by, tally",
+    "Kernel — puts, print, require, require_relative, pp, lambda, proc",
+    "Module / Class — include, extend, prepend, attr_accessor, define_method",
+    "Thread / Fiber / Ractor — concurrency primitives",
+    "Exception / rescue / raise — exception hierarchy and error handling",
+    "RubyVM::YJIT — JIT compiler interface and statistics",
+    "GC — garbage collector tuning and profiling API",
+    "ObjectSpace — object enumeration and memory introspection",
+    "Comparable / Enumerable — mixin modules for ordering and collection behavior"
+  ]
+}

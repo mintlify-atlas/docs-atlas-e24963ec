@@ -1,0 +1,80 @@
+---
+title: "Standard Library Overview"
+description: "Ruby ships with a rich standard library — no external gems required."
+---
+
+Ruby includes a large collection of classes and modules available without installing any external gems. You load them on demand with `require`, keeping startup time low while giving you access to HTTP clients, JSON parsers, file utilities, and much more.
+
+```ruby
+require 'json'
+require 'net/http'
+require 'pathname'
+```
+
+## Explore the library
+
+<CardGroup cols={2}>
+  <Card title="Standard Library Overview" icon="book-open" href="/stdlib/overview">
+    A map of what ships with Ruby and how the pieces fit together.
+  </Card>
+  <Card title="Networking" icon="globe" href="/stdlib/networking">
+    Make HTTP requests, parse URIs, and resolve DNS — no gems required.
+  </Card>
+  <Card title="Utility Libraries" icon="wrench" href="/stdlib/utilities">
+    JSON, YAML, ERB, FileUtils, SecureRandom, Timeout, and more.
+  </Card>
+</CardGroup>
+
+## Key default gems
+
+Default gems ship with every Ruby release and can also be updated independently via RubyGems (`gem update json`). They are always available and cannot be uninstalled.
+
+| Library | Description |
+|---|---|
+| `Bundler` | Manage your Ruby application's gem dependencies |
+| `ERB` | Embedded Ruby templating system |
+| `JSON` | Parse and generate JSON (implemented as a C extension) |
+| `YAML` | The Ruby client for the Psych YAML implementation |
+| `FileUtils` | Copy, move, remove, and create files and directories |
+| `Tempfile` | Create temporary files that are automatically cleaned up |
+| `URI` | Parse and build Uniform Resource Identifiers |
+| `Net::HTTP` | Full-featured HTTP/1.1 client |
+| `Open3` | Run subprocesses with access to stdin, stdout, and stderr |
+| `Resolv` | Thread-safe DNS resolver written in pure Ruby |
+| `SecureRandom` | Cryptographically secure random number and token generation |
+| `Shellwords` | Parse and escape strings using UNIX Bourne shell word rules |
+| `Pathname` | Object-oriented representation of filesystem paths |
+| `Timeout` | Abort long-running operations after a time limit |
+| `Singleton` | Mixin that enforces the Singleton pattern |
+| `PP` | Pretty-printer for Ruby objects |
+
+## How to require a library
+
+Most standard library modules are not loaded by default. Use `require` with the library name:
+
+```ruby
+require 'json'
+require 'net/http'
+require 'fileutils'
+require 'securerandom'
+```
+
+Some libraries, like `Pathname`, are core classes whose basic functionality is always available, but `require 'pathname'` loads additional methods that depend on other libraries.
+
+## Default gems, bundled gems, and extensions
+
+Ruby's standard library is split into three categories:
+
+**Default gems** ship with Ruby and are available as standalone RubyGems packages. They cannot be uninstalled from the Ruby installation, but you can update them with `gem update`. You can pin a specific version in a Gemfile:
+
+```ruby
+gem "json", ">= 2.6"
+```
+
+**Bundled gems** also ship with Ruby releases, but unlike default gems they *can* be uninstalled, and they must be declared in a `Gemfile` when used with Bundler. Examples include `minitest`, `rake`, `csv`, `logger`, and `debug`.
+
+**Extensions** are C extensions compiled into Ruby itself. They are always present and require no `gem install`. Examples include `JSON` (the C parser), `Digest`, `OpenSSL`, `Date`, and `Socket`.
+
+<Note>
+  When you run `gem update --system` or `gem update json`, you update the default gem for the current Ruby installation only. Other Ruby versions managed by rbenv or RVM are unaffected.
+</Note>

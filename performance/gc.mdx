@@ -1,0 +1,351 @@
+---
+title: "Garbage Collection"
+description: "Understanding and tuning Ruby's garbage collector for your workload."
+---
+
+Ruby uses a **mark-and-sweep** garbage collector (GC) with generational and incremental enhancements. Understanding how it works and which knobs are available lets you reduce pause times, lower memory footprint, and diagnose memory leaks.
+
+## How Ruby's GC works
+
+### Mark-and-sweep
+
+Every GC cycle has two phases:
+
+1. **Mark** — starting from root objects (globals, stack, etc.), the GC traverses the object graph and marks every reachable object as live.
+2. **Sweep** — any unmarked object is considered dead and its slot is reclaimed for future allocations.
+
+### Generational GC (RGenGC)
+
+Ruby's GC is *generational*: objects are classified as **young** (recently allocated) or **old** (survived multiple collections).
+
+- **Minor GC** — marks and sweeps only young objects. Fast and runs frequently.
+- **Major GC** — marks and sweeps all objects (young and old). Slower, runs less often.
+
+A major GC is triggered when the number of old objects or old malloc bytes exceeds a configured limit.
+
+### Incremental GC
+
+To reduce individual pause times, Ruby's mark phase can be split into **incremental steps** interleaved with normal program execution. This spreads the marking work across many small pauses rather than one long stop-the-world event.
+
+<Note>
+Incremental marking only applies to major GC cycles. Minor GCs always mark immediately.
+</Note>
+
+### Heap compaction
+
+Ruby 2.7+ includes `GC.compact`, which moves live objects closer together in memory. Compaction reduces heap fragmentation and can lower RSS after a spike in object allocations. It relies on a **read barrier** to transparently update references to moved objects.
+
+## GC module API
+
+### `GC.start` — trigger a collection
+
+Forces an immediate garbage collection cycle, even when GC is disabled via `GC.disable`.
+
+```ruby
+GC.start
+# Major GC, immediate mark, immediate sweep (defaults)
+
+GC.start(full_mark: false)
+# Minor GC only — marks young objects
+
+GC.start(immediate_mark: false)
+# Incremental major GC — marking is interleaved with execution
+
+GC.start(immediate_sweep: false)
+# Lazy sweep — sweeping is deferred and interleaved with execution
+```
+
+<Note>
+The keyword arguments are CRuby-specific and may be ignored or change between versions.
+</Note>
+
+### `GC.stat` — inspect GC statistics
+
+Returns a hash of live GC metrics. This is the primary tool for understanding your application's GC behaviour.
+
+```ruby
+GC.stat
+# =>
+# { count: 28,
+#   time: 1,
+#   marking_time: 1,
+#   sweeping_time: 0,
+#   heap_allocated_pages: 521,
+#   heap_available_slots: 539590,
+#   heap_live_slots: 422243,
+#   heap_free_slots: 117347,
+#   heap_marked_slots: 264877,
+#   total_allocated_objects: 2246376,
+#   total_freed_objects: 1824133,
+#   malloc_increase_bytes: 50982,
+#   malloc_increase_bytes_limit: 18535172,
+#   minor_gc_count: 18,
+#   major_gc_count: 10,
+#   compact_count: 0,
+#   old_objects: 216365,
+#   old_objects_limit: 432540,
+#   oldmalloc_increase_bytes: 1654232,
+#   oldmalloc_increase_bytes_limit: 16846103,
+#   ... }
+```
+
+Fetch a single value to avoid allocation overhead in tight loops:
+
+```ruby
+GC.stat(:major_gc_count)  # => 10
+GC.stat(:heap_live_slots) # => 422243
+```
+
+Key fields:
+
+| Field | Description |
+|---|---|
+| `:count` | Total GC runs (minor + major) since process start |
+| `:minor_gc_count` | Minor GC runs since process start |
+| `:major_gc_count` | Major GC runs since process start |
+| `:heap_live_slots` | Slots holding live objects |
+| `:heap_free_slots` | Reclaimed, reusable slots |
+| `:old_objects` | Live objects that have survived ≥ 3 GCs |
+| `:total_allocated_objects` | Cumulative objects allocated since start |
+| `:total_freed_objects` | Cumulative objects freed since start |
+| `:malloc_increase_bytes` | Heap memory allocated for objects since last GC |
+| `:compact_count` | Compaction runs since process start |
+
+### `GC.compact` — compact the heap
+
+Moves live objects to contiguous slots to reduce fragmentation. Available since Ruby 2.7.
+
+```ruby
+GC.compact
+# => { considered: { T_STRING: 1234, T_ARRAY: 456, ... },
+#      moved:      { T_STRING: 789,  T_ARRAY: 123, ... } }
+```
+
+<Tip>
+Run `GC.compact` after application boot (e.g. in a `Unicorn after_fork` hook) to pack the post-boot heap before serving requests. This can reduce per-worker RSS by lowering fragmentation.
+</Tip>
+
+<Warning>
+`GC.compact` triggers a full GC stop. Do not call it in a hot path or in response to user requests.
+</Warning>
+
+### `GC.disable` / `GC.enable`
+
+Temporarily prevent automatic GC from running. `GC.start` still works while GC is disabled.
+
+```ruby
+GC.disable  # => false (was not already disabled)
+GC.disable  # => true  (was already disabled)
+
+# ... allocate a batch of objects without GC interference ...
+
+GC.enable   # => true  (was disabled)
+GC.enable   # => false (was already enabled)
+```
+
+<Warning>
+Disabling GC for extended periods can cause runaway memory growth. Re-enable it as soon as the allocation-sensitive section completes.
+</Warning>
+
+### `GC.measure_total_time` / `GC.total_time`
+
+Track cumulative GC wall-clock time in nanoseconds. Time measurement is enabled by default.
+
+```ruby
+GC.measure_total_time          # => true
+GC.total_time                  # => 625000   (nanoseconds)
+GC.start
+GC.total_time                  # => 937500
+
+# Disable measurement to remove the instrumentation overhead
+GC.measure_total_time = false
+GC.start
+GC.total_time                  # => 937500   (unchanged)
+
+GC.measure_total_time = true
+GC.start
+GC.total_time                  # => 1406250
+```
+
+<Note>
+`GC.total_time` only accumulates while `GC.measure_total_time` is `true`. The counter is not reset between calls — it is a running total since the process started.
+</Note>
+
+## Environment variable tuning
+
+These variables let you pre-configure the GC before any Ruby code runs, which is useful for container deployments and benchmarks.
+
+| Variable | Description |
+|---|---|
+| `RUBY_GC_HEAP_INIT_SLOTS` | Initial number of heap slots (default: 10000). Increase if your app allocates many objects at boot. |
+| `RUBY_GC_HEAP_FREE_SLOTS` | Minimum free slots to maintain after a GC. Higher values reduce GC frequency at the cost of more memory. |
+| `RUBY_GC_HEAP_FREE_SLOTS_MIN_RATIO` | Minimum ratio of free to live slots after GC (default: 0.20). |
+| `RUBY_GC_HEAP_FREE_SLOTS_MAX_RATIO` | Maximum ratio of free slots before the heap is shrunk (default: 0.65). |
+| `RUBY_GC_HEAP_GROWTH_FACTOR` | Factor by which the heap grows when more slots are needed (default: 1.8). |
+| `RUBY_GC_HEAP_GROWTH_MAX_SLOTS` | Maximum slots added per heap expansion (0 = unlimited). |
+| `RUBY_GC_MALLOC_LIMIT` | Bytes of malloc before a GC is triggered (default: ~16 MiB). |
+| `RUBY_GC_MALLOC_LIMIT_MAX` | Upper bound for the adaptive malloc limit. |
+| `RUBY_GC_MALLOC_LIMIT_GROWTH_FACTOR` | Growth factor for the adaptive malloc limit. |
+| `RUBY_GC_OLDMALLOC_LIMIT` | Old-generation malloc threshold for major GC (default: ~16 MiB). |
+| `RUBY_GC_OLDMALLOC_LIMIT_MAX` | Upper bound for the old malloc limit. |
+
+<CodeGroup>
+
+```bash increase heap for object-heavy apps
+RUBY_GC_HEAP_INIT_SLOTS=800000 \
+RUBY_GC_HEAP_FREE_SLOTS=200000 \
+ruby app.rb
+```
+
+```bash reduce GC frequency under malloc pressure
+RUBY_GC_MALLOC_LIMIT=67108864 \
+RUBY_GC_OLDMALLOC_LIMIT=67108864 \
+ruby app.rb
+```
+
+</CodeGroup>
+
+<Tip>
+Setting `RUBY_GC_HEAP_INIT_SLOTS` to a value close to your steady-state live slot count eliminates heap growth GCs during boot and can reduce startup time noticeably.
+</Tip>
+
+## ObjectSpace
+
+`ObjectSpace` provides a lower-level view of the live object graph.
+
+### `ObjectSpace.each_object`
+
+Iterate over every live object of a given class:
+
+```ruby
+count = 0
+ObjectSpace.each_object(String) { count += 1 }
+puts "Live strings: #{count}"
+
+# Collect all live Proc objects
+procs = ObjectSpace.each_object(Proc).to_a
+```
+
+### `ObjectSpace.count_objects`
+
+Returns a summary of object counts by type, without iterating:
+
+```ruby
+ObjectSpace.count_objects
+# =>
+# { TOTAL: 615620,
+#   FREE:  191818,
+#   T_OBJECT: 14141,
+#   T_CLASS: 1442,
+#   T_MODULE: 311,
+#   T_FLOAT: 4,
+#   T_STRING: 241474,
+#   T_REGEXP: 1975,
+#   T_ARRAY: 95167,
+#   T_HASH: 5688,
+#   T_BIGNUM: 2,
+#   T_FILE: 8,
+#   T_DATA: 27511,
+#   T_MATCH: 97,
+#   T_COMPLEX: 1,
+#   T_SYMBOL: 1397,
+#   T_IMEMO: 25321,
+#   T_ICLASS: 241 }
+```
+
+## Memory profiling
+
+### `memory_profiler` gem
+
+The `memory_profiler` gem measures allocations and retained objects for a block of code.
+
+```ruby
+require 'memory_profiler'
+
+report = MemoryProfiler.report do
+  # Code to profile
+  1000.times { "hello " + "world" }
+end
+
+report.pretty_print
+# Total allocated: 128000 bytes (2000 objects)
+# Total retained:  0 bytes (0 objects)
+#
+# allocated memory by gem
+# -----------------------------------
+#      128000  other
+#
+# allocated objects by class
+# -----------------------------------
+#        2000  String
+```
+
+### `objspace` standard library
+
+Ruby's `objspace` library exposes additional allocation tracking:
+
+```ruby
+require 'objspace'
+
+# Enable allocation tracing (must be called before allocations you want to track)
+ObjectSpace.trace_object_allocations_start
+
+result = []
+ObjectSpace.trace_object_allocations do
+  result = Array.new(5) { |i| "item_#{i}" }
+end
+
+result.each do |obj|
+  puts "#{obj.inspect} allocated at #{ObjectSpace.allocation_sourcefile(obj)}:#{ObjectSpace.allocation_sourceline(obj)}"
+end
+
+# Dump all live objects to a JSON file for offline analysis
+File.open('/tmp/heap.json', 'w') do |f|
+  ObjectSpace.dump_all(output: f)
+end
+```
+
+<Tip>
+`ObjectSpace.dump_all` produces a newline-delimited JSON file that can be analyzed with tools like [heapify](https://github.com/tenderlove/heapify) or `jq` to find large object graphs and retention chains.
+</Tip>
+
+## Debugging
+
+### `GC.verify_internal_consistency`
+
+Runs the GC's internal consistency checks and raises if the heap is in an invalid state. Intended for debugging Ruby itself or C extensions — not for production use.
+
+```ruby
+GC.verify_internal_consistency
+# Raises RuntimeError if the heap is corrupted
+```
+
+<Warning>
+`GC.verify_internal_consistency` is slow and is only useful when debugging GC-related bugs in native extensions or Ruby itself. Never call it in production code.
+</Warning>
+
+### `GC.stress=`
+
+Forces a GC run at every possible opportunity (every allocation). Extremely slow, but effective for reproducing GC-related bugs:
+
+```ruby
+GC.stress = true   # enable stress mode
+# ... code under test ...
+GC.stress = false  # disable
+```
+
+### `GC.latest_gc_info`
+
+Returns metadata about the most recent GC cycle, including what triggered it:
+
+```ruby
+GC.latest_gc_info
+# =>
+# { major_by: :force,
+#   gc_by: :method,
+#   have_finalizer: false,
+#   immediate_sweep: true,
+#   state: :none }
+
+GC.latest_gc_info(:gc_by) # => :newobj
+```

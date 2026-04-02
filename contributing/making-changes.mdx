@@ -1,0 +1,195 @@
+---
+title: "Making Changes"
+description: "How to propose and submit changes to Ruby core and the standard library."
+---
+
+## Codebase Structure
+
+CRuby is a mix of C source, Ruby source, and supporting files. Understanding what lives where helps you find the right place to make a change.
+
+```text
+ruby/
+├── *.c              # Core interpreter (object.c, array.c, string.c, …)
+├── *.h / internal/ # C headers; internal/ is for interpreter-private headers
+├── include/
+│   └── ruby.h       # Public C API header
+├── lib/             # Standard library (mirrored from standalone gem repos)
+├── ext/             # C extensions (openssl, json, etc.)
+├── test/            # test-unit test suite
+├── spec/ruby/       # ruby/spec mirror
+├── bootstraptest/   # Miniruby bootstrap tests
+├── doc/             # Standalone documentation pages
+└── insns.def        # YARV instruction definitions (processed by tool/insns2vm.rb)
+```
+
+<Note>
+  Everything under `lib/` is mirrored from standalone gem repositories. Changes to stdlib should be made upstream — see [Standard Library Changes](#standard-library-changes) below.
+</Note>
+
+## Code Style
+
+Follow these conventions when writing Ruby or C code for CRuby:
+
+**C code:**
+- Indent 4 spaces, no tabs (tabs equal 8 spaces, i.e., two indent levels)
+- ANSI C style for function declarations
+- Follow the C99 standard
+- Use `PascalCase` for class/module names
+- Use `UNDERSCORE_SEPARATED_UPPER_CASE` for constants
+- Abbreviations should be all uppercase (e.g., `IO`, `GC`)
+
+**Ruby code:**
+- Indent 2 spaces, no tabs
+
+**General:**
+- Do not change code unrelated to your pull request, including style fixes in other areas
+
+## Writing a Patch
+
+<Steps>
+  <Step title="Start from a clean branch">
+    ```bash
+    git checkout master
+    git pull
+    git checkout -b my-feature-or-fix
+    ```
+  </Step>
+
+  <Step title="Make your changes">
+    Edit the relevant `.c`, `.rb`, or `.h` files. For built-in classes, the C source is usually `<classname>.c` in the repo root (e.g., `string.c`, `array.c`, `hash.c`).
+  </Step>
+
+  <Step title="Add tests">
+    Add a test in `test/ruby/` or `bootstraptest/` that fails without your change and passes with it. For bug fixes, the test name should reference the issue number:
+
+    ```ruby
+    def test_issue_1234_upcase_with_encoding
+      # regression test for Bug #1234
+      assert_equal "HELLO", "hello".upcase
+    end
+    ```
+  </Step>
+
+  <Step title="Build and test">
+    ```bash
+    make
+    make test-all TESTS="../test/ruby/test_string.rb"
+    make check
+    ```
+  </Step>
+
+  <Step title="Commit your changes">
+    See [Commit Messages](#commit-messages) below for the expected format.
+  </Step>
+
+  <Step title="Open a pull request">
+    Push your branch to your fork on GitHub and open a pull request against `ruby/ruby`. CI will run automatically.
+  </Step>
+</Steps>
+
+## Commit Messages
+
+Well-structured commit messages help reviewers and make the git history useful.
+
+- **Subject line:** short, imperative, no trailing period (e.g., `Fix String#gsub with encoding`)
+- **Body:** explain *why* the change is being made, not just what changed
+- **References:** cite related issues or mailing-list threads
+
+```text
+Fix String#gsub producing incorrect byte sequences with UTF-8
+
+When the replacement string contained multi-byte characters and the
+pattern matched at a byte boundary, the resulting string could have
+an invalid byte sequence.
+
+Fixes [Bug #1234]
+See also [ruby-core:56789]
+```
+
+Reference format:
+- Bug: `[Bug #1234]`
+- Feature request: `[Feature #3456]`
+- Mailing list: `[ruby-core:12345]`
+
+## The Review Process
+
+1. **CI checks** — GitHub Actions runs the full test suite on your PR automatically.
+2. **Committer review** — A Ruby committer will review the code and may request changes.
+3. **Core team discussion** — For language or API changes, discussion may happen on the Redmine issue or the ruby-core mailing list before acceptance.
+4. **Merge** — Once approved, a committer with write access merges the PR.
+
+There is also a [broader CI system at rubyci.org](https://rubyci.org) that runs on master across a wide range of platforms (Solaris SPARC, macOS, various Linux distributions).
+
+<Tip>
+  If your PR has no activity after 10 days, post a polite follow-up comment. The core team is small and reviews can take time.
+</Tip>
+
+## Submitting to the Issue Tracker
+
+For bug fixes, it is good practice to file or reference a Redmine issue at [bugs.ruby-lang.org](https://bugs.ruby-lang.org) before or alongside your PR. This creates a permanent record and allows discussion.
+
+- Search for an existing issue first.
+- Use the **Bug** tracker type for defects, **Feature** for new functionality.
+- Include `ruby -v` output and a minimal reproduction script.
+
+## Standard Library Changes
+
+Everything under `lib/` in the main ruby/ruby repository is a **mirror** of standalone gem repositories. Do not open pull requests against `lib/` in ruby/ruby directly.
+
+Instead, find the upstream repository for the gem you want to change and contribute there. For example:
+
+| Stdlib | Upstream repository |
+|---|---|
+| `erb` | [github.com/ruby/erb](https://github.com/ruby/erb) |
+| `ostruct` | [github.com/ruby/ostruct](https://github.com/ruby/ostruct) |
+| `set` | [github.com/ruby/set](https://github.com/ruby/set) |
+
+A full list of maintainers and upstream repositories is at [docs.ruby-lang.org/en/master/maintainers_md.html](https://docs.ruby-lang.org/en/master/maintainers_md.html).
+
+### Working in a Stdlib Repo
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    bundle install
+    ```
+  </Step>
+
+  <Step title="Compile (if the gem has a C extension)">
+    Libraries with an `ext/` directory have C files that must be compiled:
+
+    ```bash
+    bundle exec rake compile
+    ```
+  </Step>
+
+  <Step title="Run tests">
+    All standard libraries use `test-unit`:
+
+    ```bash
+    bundle exec rake test
+    ```
+
+    Run a single file:
+
+    ```bash
+    bundle exec rake test TEST="test/test_foo.rb"
+    ```
+
+    Run a single test case:
+
+    ```bash
+    bundle exec rake test TEST="test/test_foo.rb" TESTOPTS="--name=/test_mytest/"
+    ```
+  </Step>
+</Steps>
+
+## Benchmarking
+
+If your change may affect performance, measure it using the benchmark suite:
+
+```bash
+make benchmark
+```
+
+See the [benchmark README](https://github.com/ruby/ruby/tree/master/benchmark#make-benchmark) for available targets and how to compare results across builds.

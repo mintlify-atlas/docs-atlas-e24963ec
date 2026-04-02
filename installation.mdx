@@ -1,0 +1,264 @@
+---
+title: "Installation"
+description: "Install Ruby on macOS, Linux, or Windows."
+---
+
+## Choose your platform
+
+<Tabs>
+  <Tab title="macOS">
+    ### Recommended: rbenv via Homebrew
+
+    [rbenv](https://github.com/rbenv/rbenv) is the recommended way to install and manage Ruby on macOS. It lets you switch between Ruby versions per project and keeps your system Ruby untouched.
+
+    <Steps>
+      <Step title="Install Homebrew">
+        If you don't already have Homebrew installed:
+
+        ```bash
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        ```
+      </Step>
+      <Step title="Install rbenv and ruby-build">
+        ```bash
+        brew install rbenv ruby-build
+        ```
+
+        Then add rbenv to your shell. For zsh (the default on macOS):
+
+        ```bash
+        echo 'eval "$(rbenv init - zsh)"' >> ~/.zshrc
+        source ~/.zshrc
+        ```
+
+        For bash:
+
+        ```bash
+        echo 'eval "$(rbenv init - bash)"' >> ~/.bash_profile
+        source ~/.bash_profile
+        ```
+      </Step>
+      <Step title="Install Ruby">
+        List available versions:
+
+        ```bash
+        rbenv install --list
+        ```
+
+        Install the latest stable release (for example, 3.3.6):
+
+        ```bash
+        rbenv install 3.3.6
+        rbenv global 3.3.6
+        ```
+      </Step>
+      <Step title="Verify">
+        ```bash
+        ruby --version
+        gem --version
+        ```
+
+        You should see output like:
+
+        ```
+        ruby 3.3.6 (2024-11-05 revision 75015d4c1f) [arm64-darwin24]
+        3.5.22
+        ```
+      </Step>
+    </Steps>
+
+    ### Alternative: RVM
+
+    [RVM](https://rvm.io) (Ruby Version Manager) is another popular option with a broader feature set.
+
+    ```bash
+    \curl -sSL https://get.rvm.io | bash -s stable
+    source ~/.rvm/scripts/rvm
+    rvm install 3.3.6
+    rvm use 3.3.6 --default
+    ```
+
+    <Warning>
+      Do not use the system Ruby that ships with macOS for development. It is an older version managed by Apple and may be removed or modified by system updates. Always install your own Ruby using rbenv or RVM.
+    </Warning>
+  </Tab>
+
+  <Tab title="Linux">
+    ### Recommended: rbenv
+
+    <Steps>
+      <Step title="Install dependencies">
+        <Tabs>
+          <Tab title="Debian / Ubuntu">
+            ```bash
+            sudo apt update
+            sudo apt install -y git curl libssl-dev libreadline-dev zlib1g-dev \
+              autoconf bison build-essential libyaml-dev libreadline-dev \
+              libncurses5-dev libffi-dev libgdbm-dev
+            ```
+          </Tab>
+          <Tab title="Fedora / RHEL / CentOS">
+            ```bash
+            sudo dnf install -y git curl openssl-devel readline-devel zlib-devel \
+              autoconf bison gcc-c++ libyaml-devel libffi-devel gdbm-devel
+            ```
+          </Tab>
+        </Tabs>
+      </Step>
+      <Step title="Install rbenv and ruby-build">
+        ```bash
+        git clone https://github.com/rbenv/rbenv.git ~/.rbenv
+        git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build
+        ```
+
+        Add rbenv to your shell (bash example):
+
+        ```bash
+        echo 'export PATH="$HOME/.rbenv/bin:$PATH"' >> ~/.bashrc
+        echo 'eval "$(rbenv init - bash)"' >> ~/.bashrc
+        source ~/.bashrc
+        ```
+      </Step>
+      <Step title="Install Ruby">
+        ```bash
+        rbenv install 3.3.6
+        rbenv global 3.3.6
+        ```
+      </Step>
+      <Step title="Verify">
+        ```bash
+        ruby --version
+        gem --version
+        ```
+      </Step>
+    </Steps>
+
+    ### Alternative: RVM
+
+    ```bash
+    \curl -sSL https://get.rvm.io | bash -s stable
+    source ~/.rvm/scripts/rvm
+    rvm install 3.3.6
+    rvm use 3.3.6 --default
+    ```
+
+    ### Alternative: Package managers
+
+    Package manager repositories often carry older Ruby versions. Use these only if you have no version-management requirements.
+
+    <Tabs>
+      <Tab title="apt (Debian/Ubuntu)">
+        ```bash
+        sudo apt update
+        sudo apt install ruby-full
+        ```
+      </Tab>
+      <Tab title="dnf (Fedora/RHEL)">
+        ```bash
+        sudo dnf install ruby
+        ```
+      </Tab>
+    </Tabs>
+
+    <Note>
+      The version available from `apt` or `dnf` depends on your distribution release. It may be several minor versions behind the current stable Ruby.
+    </Note>
+  </Tab>
+
+  <Tab title="Windows">
+    ### RubyInstaller (recommended)
+
+    [RubyInstaller](https://rubyinstaller.org) is the easiest way to install Ruby on Windows. It packages Ruby, the MSYS2 development toolchain, and common native gems.
+
+    <Steps>
+      <Step title="Download RubyInstaller">
+        Go to [rubyinstaller.org/downloads](https://rubyinstaller.org/downloads) and download the **Ruby+Devkit** installer for the latest stable release (for example, Ruby 3.3.x).
+
+        Choose the x64 version unless you specifically need 32-bit.
+      </Step>
+      <Step title="Run the installer">
+        Run the downloaded `.exe` file. On the final screen, leave **"Run 'ridk install'"** checked and click **Finish**.
+
+        This opens a terminal to install the MSYS2 components needed to build native gems. Select option `1` (MSYS2 base installation) when prompted.
+      </Step>
+      <Step title="Verify in a new terminal">
+        Open a new Command Prompt or PowerShell window:
+
+        ```powershell
+        ruby --version
+        gem --version
+        ```
+
+        You should see:
+
+        ```
+        ruby 3.3.6 (2024-11-05 revision 75015d4c1f) [x64-mingw-ucrt]
+        3.5.22
+        ```
+      </Step>
+    </Steps>
+
+    <Tip>
+      After installation, use the **Start Command Prompt with Ruby** shortcut that RubyInstaller adds to the Start menu. It ensures the Ruby environment is properly configured.
+    </Tip>
+  </Tab>
+</Tabs>
+
+## Version managers: rbenv vs RVM
+
+Both rbenv and RVM let you install and switch between multiple Ruby versions. Here is how they differ:
+
+| | rbenv | RVM |
+|---|---|---|
+| **Approach** | Shims — intercepts `ruby` calls with small wrapper scripts | Shell function — overrides shell behaviour |
+| **Footprint** | Lightweight, minimal shell impact | Larger, modifies shell more aggressively |
+| **Gemsets** | Not supported (use Bundler instead) | Supported natively |
+| **Setup** | Requires adding shims to `PATH` | Requires sourcing an init script |
+| **Recommended for** | Most users | Users who need gemsets |
+
+For most projects, rbenv with [Bundler](https://bundler.io) (`gem install bundler`) is sufficient and simpler.
+
+## Verify your installation
+
+After installing Ruby with any method, confirm both Ruby and RubyGems are working:
+
+```bash
+ruby --version
+gem --version
+irb --version
+```
+
+Run a quick sanity check:
+
+```bash
+ruby -e 'puts "Ruby #{RUBY_VERSION} is working."'
+```
+
+Expected output:
+
+```
+Ruby 3.3.6 is working.
+```
+
+## Ruby versions
+
+<Note>
+  Ruby 3.x is the current stable series. Ruby 3.3 and 3.4 include YJIT (a just-in-time compiler) enabled by default, delivering significant performance improvements over Ruby 2.x. Ruby 4.x is under active development.
+</Note>
+
+Ruby follows a predictable release schedule:
+
+- **Stable releases** are published on 25 December each year.
+- **Security patches** are backported to supported versions for approximately three years.
+- Check [www.ruby-lang.org/en/downloads/releases](https://www.ruby-lang.org/en/downloads/releases/) for the full release history.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Write your first Ruby program and explore the language fundamentals.
+  </Card>
+  <Card title="Language reference" icon="book" href="/language/syntax">
+    Detailed coverage of Ruby's syntax and features.
+  </Card>
+</CardGroup>

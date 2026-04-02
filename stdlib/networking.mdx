@@ -1,0 +1,254 @@
+---
+title: "Networking"
+description: "HTTP, URI, and DNS with Ruby's standard library."
+---
+
+Ruby's standard library covers the most common networking needs without any external dependencies. `Net::HTTP` handles full HTTP/HTTPS sessions, `URI` parses and builds URLs, `OpenURI` wraps both into a one-liner for simple reads, and `Resolv` gives you thread-safe DNS lookups.
+
+## Net::HTTP
+
+`Net::HTTP` is Ruby's built-in HTTP/1.1 client. It requires `net/http`, which in turn requires `uri` and `resolv` automatically.
+
+### Simple GET request
+
+For a one-off GET, use the convenience class method. It opens a connection, makes the request, closes the connection, and returns the response body as a string:
+
+```ruby
+require 'net/http'
+
+body = Net::HTTP.get(URI('https://api.example.com/posts/1'))
+puts body
+```
+
+To get the full `Net::HTTPResponse` object instead:
+
+```ruby
+require 'net/http'
+
+response = Net::HTTP.get_response(URI('https://api.example.com/posts/1'))
+puts response.code        # "200"
+puts response.message     # "OK"
+puts response.body
+```
+
+### POST request
+
+```ruby
+require 'net/http'
+require 'json'
+
+uri  = URI('https://api.example.com/posts')
+data = JSON.generate({ title: 'Hello', body: 'World', userId: 1 })
+
+response = Net::HTTP.post(uri, data, 'Content-Type' => 'application/json')
+puts response.code
+puts response.body
+```
+
+For form-encoded POST data, use `post_form`:
+
+```ruby
+require 'net/http'
+
+uri    = URI('https://api.example.com/login')
+params = { username: 'alice', password: 's3cr3t' }
+
+response = Net::HTTP.post_form(uri, params)
+puts response.body
+```
+
+### HTTPS
+
+`Net::HTTP` supports HTTPS out of the box. Pass `use_ssl: true` when opening a session, or use a `https://` URI with `Net::HTTP.get` — SSL is enabled automatically when the URI scheme is `https`.
+
+```ruby
+require 'net/http'
+
+Net::HTTP.start('api.example.com', 443, use_ssl: true) do |http|
+  request  = Net::HTTP::Get.new('/secure/resource')
+  request['Authorization'] = 'Bearer my-token'
+
+  response = http.request(request)
+  puts response.code
+  puts response.body
+end
+```
+
+### Sessions and multiple requests
+
+For multiple requests to the same host, open one session and reuse it. This avoids the overhead of a new TCP connection per request:
+
+```ruby
+require 'net/http'
+
+Net::HTTP.start('api.example.com', use_ssl: true) do |http|
+  r1 = http.get('/users/1')
+  r2 = http.get('/users/2')
+  r3 = http.get('/posts?userId=1')
+
+  puts r1.body
+  puts r2.body
+  puts r3.body
+end
+```
+
+### Response codes
+
+`Net::HTTPResponse` subclasses map to HTTP status ranges. You can branch on them directly:
+
+```ruby
+require 'net/http'
+
+response = Net::HTTP.get_response(URI('https://api.example.com/posts/1'))
+
+case response
+when Net::HTTPSuccess        # 2xx
+  puts response.body
+when Net::HTTPRedirection    # 3xx
+  puts "Redirected to: #{response['Location']}"
+when Net::HTTPClientError    # 4xx
+  puts "Client error: #{response.code}"
+when Net::HTTPServerError    # 5xx
+  puts "Server error: #{response.code}"
+end
+```
+
+<Tip>
+  If you only need to make a few simple GET requests, `OpenURI` (see below) is less verbose than `Net::HTTP`.
+</Tip>
+
+## URI
+
+The `URI` module parses and constructs Uniform Resource Identifiers. It implements RFC 2396 and supports `http`, `https`, `ftp`, `mailto`, `ldap`, and more.
+
+### Parsing a URI
+
+```ruby
+require 'uri'
+
+uri = URI("http://foo.com/posts?id=30&limit=5#time=1305298413")
+# => #<URI::HTTP http://foo.com/posts?id=30&limit=5#time=1305298413>
+
+uri.scheme    # => "http"
+uri.host      # => "foo.com"
+uri.port      # => 80
+uri.path      # => "/posts"
+uri.query     # => "id=30&limit=5"
+uri.fragment  # => "time=1305298413"
+
+uri.to_s      # => "http://foo.com/posts?id=30&limit=5#time=1305298413"
+```
+
+### Building a URL with query parameters
+
+```ruby
+require 'uri'
+
+uri       = URI::HTTP.build(host: 'api.example.com', path: '/search')
+params    = { q: 'ruby standard library', page: 1 }
+uri.query = URI.encode_www_form(params)
+
+puts uri.to_s
+# => "http://api.example.com/search?q=ruby+standard+library&page=1"
+```
+
+### Decoding query parameters
+
+```ruby
+require 'uri'
+
+query  = "q=ruby+standard+library&page=1"
+params = URI.decode_www_form(query).to_h
+# => { "q" => "ruby standard library", "page" => "1" }
+```
+
+<Note>
+  `URI()` (the convenience method) is equivalent to `URI.parse()` but raises `URI::InvalidURIError` for malformed input. Use `URI.parse` when you want to rescue invalid URIs explicitly.
+</Note>
+
+## OpenURI
+
+`OpenURI` wraps `Net::HTTP`, `Net::HTTPS`, and `Net::FTP` to let you open remote URLs like local files using `URI.open` (or `Kernel#open` with `open-uri` required).
+
+```ruby
+require 'open-uri'
+
+# Read a remote URL into a string
+content = URI.open('https://api.github.com/repos/ruby/ruby') do |f|
+  puts f.content_type   # "application/json"
+  puts f.charset        # "utf-8"
+  f.read
+end
+
+puts content
+```
+
+For a simple one-liner:
+
+```ruby
+require 'open-uri'
+
+html = URI.open('https://www.ruby-lang.org/en/').read
+```
+
+<Warning>
+  Avoid passing user-supplied strings directly to `URI.open` or `Kernel#open`. An attacker could pass a string like `| rm -rf /` to execute shell commands via the legacy `open` method. Always validate or sanitise input, and prefer `URI.open` over `Kernel#open`.
+</Warning>
+
+## Resolv
+
+`Resolv` is a thread-safe DNS resolver written in pure Ruby. Unlike the C-based `Socket.getaddrinfo`, it does not block the entire Ruby process while waiting for DNS responses.
+
+```ruby
+require 'resolv'
+
+# Forward lookup: hostname -> IP address
+ip = Resolv.getaddress('www.ruby-lang.org')
+puts ip   # e.g. "210.251.121.214"
+
+# Get all addresses
+Resolv.getaddresses('www.ruby-lang.org').each { |addr| puts addr }
+
+# Reverse lookup: IP address -> hostname
+host = Resolv.getname('8.8.8.8')
+puts host   # "dns.google"
+```
+
+For more control, use a `Resolv::DNS` instance with a custom nameserver:
+
+```ruby
+require 'resolv'
+
+dns = Resolv::DNS.new(nameserver: ['1.1.1.1', '1.0.0.1'])
+dns.each_address('www.ruby-lang.org') { |addr| puts addr }
+```
+
+## Socket
+
+For low-level TCP or UDP work, Ruby provides `Socket` (a C extension wrapping the OS socket API) and the higher-level `TCPSocket`, `UDPSocket`, and `TCPServer` classes.
+
+```ruby
+require 'socket'
+
+# Simple TCP client
+TCPSocket.open('www.ruby-lang.org', 80) do |sock|
+  sock.puts "GET / HTTP/1.0\r\nHost: www.ruby-lang.org\r\n\r\n"
+  puts sock.read
+end
+```
+
+```ruby
+require 'socket'
+
+# Simple TCP server
+server = TCPServer.new(2345)
+loop do
+  client = server.accept
+  client.puts "Hello from Ruby!"
+  client.close
+end
+```
+
+<Note>
+  For most HTTP work, prefer `Net::HTTP` over raw `Socket`. Use `Socket` when you need a protocol that `Net::HTTP` does not support, or when you need fine-grained control over connection options.
+</Note>

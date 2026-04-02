@@ -1,0 +1,365 @@
+---
+title: "Array and Hash"
+description: "Ruby's Array and Hash classes — ordered collections and key-value stores."
+---
+
+<Tabs>
+  <Tab title="Array">
+
+`Array` is an ordered, integer-indexed collection of objects. Arrays can hold any mix of object types and grow dynamically.
+
+## Creating arrays
+
+```ruby
+# Array literal
+a = [1, 2, 3]
+b = ["apple", :sym, 42, nil, true]
+
+# Array.new
+Array.new(3)          # => [nil, nil, nil]
+Array.new(3, 0)       # => [0, 0, 0]
+Array.new(5) { |i| i * 2 }  # => [0, 2, 4, 6, 8]
+
+# %w[]: array of strings (no interpolation)
+%w[one two three]     # => ["one", "two", "three"]
+
+# %i[]: array of symbols
+%i[red green blue]    # => [:red, :green, :blue]
+
+# Kernel#Array: convert or wrap
+Array(nil)            # => []
+Array([1, 2])         # => [1, 2]
+Array(1..3)           # => [1, 2, 3]
+Array("hello")        # => ["hello"]
+```
+
+## Accessing elements
+
+```ruby
+a = [10, 20, 30, 40, 50]
+
+a[0]        # => 10     (first)
+a[-1]       # => 50     (last)
+a[1, 3]     # => [20, 30, 40]  (start, length)
+a[1..3]     # => [20, 30, 40]  (range)
+a[1...3]    # => [20, 30]      (exclusive range)
+
+a.first     # => 10
+a.first(2)  # => [10, 20]
+a.last      # => 50
+a.last(2)   # => [40, 50]
+
+# fetch raises IndexError on missing index (unlike [] which returns nil)
+a.fetch(0)          # => 10
+a.fetch(10)         # => IndexError
+a.fetch(10, "n/a")  # => "n/a"
+a.fetch(10) { |i| "index #{i} missing" }
+
+a.at(2)     # => 30  (same as a[2], no range support)
+
+# dig: traverse nested arrays safely
+nested = [[1, [2, 3]], [4, 5]]
+nested.dig(0, 1, 0)  # => 2
+nested.dig(5, 0)     # => nil  (no error)
+```
+
+## Adding and removing elements
+
+```ruby
+a = [1, 2, 3]
+
+# Append to end
+a.push(4)        # => [1, 2, 3, 4]
+a << 5           # => [1, 2, 3, 4, 5]  (shovel operator)
+a.append(6, 7)   # => [1, 2, 3, 4, 5, 6, 7]
+
+# Remove from end
+a.pop            # => 7;  a is now [1, 2, 3, 4, 5, 6]
+a.pop(2)         # => [5, 6]; a is now [1, 2, 3, 4]
+
+# Prepend to front
+a.unshift(0)     # => [0, 1, 2, 3, 4]
+
+# Remove from front
+a.shift          # => 0;  a is now [1, 2, 3, 4]
+a.shift(2)       # => [1, 2]; a is now [3, 4]
+
+# Concatenation (non-mutating)
+[1, 2] + [3, 4]          # => [1, 2, 3, 4]
+[1, 2].concat([3, 4])    # mutates receiver
+
+# flatten: collapse nested arrays
+[1, [2, [3, 4]]].flatten       # => [1, 2, 3, 4]
+[1, [2, [3, 4]]].flatten(1)    # => [1, 2, [3, 4]]  (depth 1 only)
+
+# compact: remove nil values
+[1, nil, 2, nil, 3].compact    # => [1, 2, 3]
+
+# uniq: remove duplicates (preserves first occurrence)
+[1, 2, 2, 3, 1].uniq           # => [1, 2, 3]
+[{a: 1}, {a: 2}, {a: 1}].uniq  # => [{a: 1}, {a: 2}]
+```
+
+## Iteration
+
+```ruby
+a = [3, 1, 4, 1, 5, 9]
+
+# each: iterate over elements
+a.each { |n| print "#{n} " }       # prints: 3 1 4 1 5 9
+
+# map / collect: transform elements, return new array
+a.map { |n| n * 2 }               # => [6, 2, 8, 2, 10, 18]
+
+# select / filter: keep elements where block is truthy
+a.select { |n| n > 3 }            # => [4, 5, 9]
+
+# reject: keep elements where block is falsy
+a.reject { |n| n > 3 }            # => [3, 1, 1]
+
+# reduce / inject: fold into a single value
+a.reduce(:+)                      # => 23  (sum)
+a.reduce(100, :+)                 # => 123 (with initial value)
+a.reduce { |sum, n| sum + n }     # => 23
+
+# each_with_index: index alongside element
+a.each_with_index do |val, idx|
+  puts "a[#{idx}] = #{val}"
+end
+
+# each_with_object: build up an object
+a.each_with_object([]) do |n, acc|
+  acc << n * 3 if n.odd?
+end
+# => [9, 3, 3, 15, 27]
+
+# flat_map: map then flatten one level
+[[1, 2], [3, 4]].flat_map { |sub| sub.map { |n| n * 10 } }
+# => [10, 20, 30, 40]
+
+# zip: combine arrays element-wise
+[1, 2, 3].zip([4, 5, 6], [7, 8, 9])
+# => [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+```
+
+## Sorting
+
+```ruby
+a = [5, 3, 8, 1, 9, 2]
+
+a.sort                              # => [1, 2, 3, 5, 8, 9]
+a.sort { |x, y| y <=> x }         # => [9, 8, 5, 3, 2, 1]  (descending)
+
+words = ["banana", "apple", "fig", "cherry"]
+words.sort                          # => ["apple", "banana", "cherry", "fig"]
+words.sort_by { |w| w.length }      # => ["fig", "apple", "banana", "cherry"]
+words.sort_by(&:length)             # same, with Symbol#to_proc
+
+a.min         # => 1
+a.max         # => 9
+a.min_by { |n| n.to_s }  # => 1  (lexicographic min)
+a.max_by { |n| n.to_s }  # => 9
+a.minmax      # => [1, 9]
+```
+
+## Set operations
+
+```ruby
+a = [1, 2, 3, 4]
+b = [3, 4, 5, 6]
+
+a | b   # => [1, 2, 3, 4, 5, 6]  (union, removes dups)
+a & b   # => [3, 4]              (intersection)
+a - b   # => [1, 2]              (difference)
+
+# Repetition
+[1, 2] * 3   # => [1, 2, 1, 2, 1, 2]
+[1, 2] * "-" # => "1-2"  (same as join)
+```
+
+## Querying
+
+```ruby
+a = [1, 2, 3, 4, 5]
+
+a.include?(3)              # => true
+a.any? { |n| n > 4 }      # => true
+a.all? { |n| n > 0 }      # => true
+a.none? { |n| n > 10 }    # => true
+a.count                    # => 5
+a.count { |n| n.even? }   # => 2
+a.empty?                   # => false
+[].empty?                  # => true
+a.tally                    # => {1=>1, 2=>1, 3=>1, 4=>1, 5=>1}
+
+[1, 2, 2, 3, 3, 3].tally  # => {1=>1, 2=>2, 3=>3}
+a.sum                      # => 15
+a.sum { |n| n * 2 }        # => 30
+```
+
+<Tip>
+  Use `map` when you need a transformed copy, `each` when you only need side effects, and `select`/`reject` to filter. Avoid mutating a collection while iterating over it.
+</Tip>
+
+  </Tab>
+  <Tab title="Hash">
+
+`Hash` is a collection of key-value pairs. Keys must be unique; any object can serve as a key, though `Symbol` keys are most common.
+
+## Creating hashes
+
+```ruby
+# Hash literal (symbol keys — the most common style)
+person = { name: "Alice", age: 30, active: true }
+
+# Equivalent with hash-rocket syntax (required for non-symbol keys)
+scores = { "Alice" => 95, "Bob" => 87 }
+mapping = { 1 => "one", 2 => "two", [1,2] => "pair" }
+
+# Hash.new with a default value (returned for missing keys)
+h = Hash.new(0)
+h[:missing]   # => 0  (default, not stored)
+
+# Hash.new with a default block
+h = Hash.new { |hash, key| hash[key] = "default for #{key}" }
+h[:foo]   # => "default for foo"; key is now stored
+
+# Hash[]: build from flat list or array of pairs
+Hash["a", 1, "b", 2]          # => {"a"=>1, "b"=>2}
+Hash[["a", 1], ["b", 2]]      # same
+[[:a, 1], [:b, 2]].to_h       # => {a: 1, b: 2}
+```
+
+## Accessing values
+
+```ruby
+h = { name: "Alice", age: 30, city: "Portland" }
+
+h[:name]              # => "Alice"
+h[:missing]           # => nil
+
+# fetch: raises KeyError on missing key (safer than [])
+h.fetch(:name)        # => "Alice"
+h.fetch(:phone)       # => KeyError: key not found: :phone
+h.fetch(:phone, "n/a")        # => "n/a"
+h.fetch(:phone) { |k| "#{k} not set" }  # => "phone not set"
+
+# values_at: multiple keys at once
+h.values_at(:name, :city)     # => ["Alice", "Portland"]
+
+# dig: traverse nested hashes safely
+data = { user: { address: { zip: "97201" } } }
+data.dig(:user, :address, :zip)   # => "97201"
+data.dig(:user, :phone, :number)  # => nil  (no error)
+```
+
+## Adding and merging
+
+```ruby
+h = { a: 1, b: 2 }
+
+# Assignment
+h[:c] = 3            # => {a: 1, b: 2, c: 3}
+h.store(:d, 4)       # same as h[:d] = 4
+
+# merge: return new hash; last key wins on conflict
+h.merge({ b: 99, e: 5 })
+# => {a: 1, b: 99, c: 3, d: 4, e: 5}
+
+# merge with block to resolve conflicts
+h.merge({ b: 99 }) { |key, old, new_val| old + new_val }
+# => {a: 1, b: 101, c: 3, d: 4}
+
+# merge! / update: mutate receiver
+h.merge!(e: 5)
+# h is now {a: 1, b: 2, c: 3, d: 4, e: 5}
+```
+
+## Iteration
+
+```ruby
+h = { a: 1, b: 2, c: 3 }
+
+# each / each_pair: yields key, value pairs
+h.each { |k, v| puts "#{k}: #{v}" }
+h.each_pair { |k, v| puts "#{k} => #{v}" }
+
+# keys and values
+h.keys    # => [:a, :b, :c]
+h.values  # => [1, 2, 3]
+
+# map: returns an array (not a hash)
+h.map { |k, v| [k, v * 10] }
+# => [[:a, 10], [:b, 20], [:c, 30]]
+
+# to get a hash back, use to_h or transform_values
+h.map { |k, v| [k, v * 10] }.to_h
+# => {a: 10, b: 20, c: 30}
+
+# select / reject: filter key-value pairs, return new hash
+h.select { |k, v| v > 1 }    # => {b: 2, c: 3}
+h.reject { |k, v| v > 1 }    # => {a: 1}
+
+# transform_keys / transform_values
+h.transform_values { |v| v * 100 }
+# => {a: 100, b: 200, c: 300}
+
+h.transform_keys { |k| k.to_s }
+# => {"a"=>1, "b"=>2, "c"=>3}
+h.transform_keys(&:to_s)  # same
+```
+
+## Querying
+
+```ruby
+h = { name: "Alice", age: 30 }
+
+h.key?(:name)          # => true
+h.has_key?(:missing)   # => false
+h.include?(:age)       # => true  (alias for key?)
+h.value?(30)           # => true
+h.has_value?(99)       # => false
+
+h.any? { |k, v| v.is_a?(Integer) }   # => true
+h.all? { |k, v| v != nil }           # => true
+h.count                               # => 2
+h.count { |k, v| v.is_a?(String) }   # => 1
+h.empty?                              # => false
+{}.empty?                             # => true
+
+h.size      # => 2
+h.length    # => 2  (alias)
+```
+
+## Transforming and slicing
+
+```ruby
+h = { a: 1, b: 2, c: 3, d: 4 }
+
+# slice: keep only specified keys
+h.slice(:a, :c)          # => {a: 1, c: 3}
+
+# except: drop specified keys (Ruby 3.0+)
+h.except(:b, :d)         # => {a: 1, c: 3}
+
+# invert: swap keys and values
+{ a: 1, b: 2 }.invert    # => {1=>:a, 2=>:b}
+
+# filter_map equivalent
+h.filter_map { |k, v| [k, v * 10] if v.even? }
+# => [[:b, 20], [:d, 40]]
+
+# to_a: array of pairs
+h.to_a   # => [[:a, 1], [:b, 2], [:c, 3], [:d, 4]]
+
+# group_by (from Enumerable)
+(1..6).group_by { |n| n % 3 }
+# => {1=>[1, 4], 2=>[2, 5], 0=>[3, 6]}
+```
+
+<Note>
+  Hash iteration order is guaranteed to be insertion order since Ruby 1.9. You can rely on `keys`, `values`, and `each` returning entries in the order they were inserted.
+</Note>
+
+  </Tab>
+</Tabs>

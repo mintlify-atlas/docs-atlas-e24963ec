@@ -1,0 +1,335 @@
+---
+title: "Regexp"
+description: "Pattern matching and text processing with Ruby's Regexp class."
+---
+
+Ruby's `Regexp` class represents compiled regular expressions. Regex literals are first-class objects, and Ruby integrates pattern matching tightly into its string and enumerable APIs.
+
+## Creating regular expressions
+
+<CodeGroup>
+
+```ruby slash literals
+# Most common form: /pattern/
+email_pattern = /\A[\w.+-]+@[\w-]+\.[a-z]{2,}\z/i
+digits        = /\d+/
+word_boundary = /\bfoo\b/
+```
+
+```ruby %r{} literals
+# %r{} avoids escaping forward slashes — useful for paths and URLs
+path_pattern = %r{/usr/local/\w+}
+url_pattern  = %r{https?://[\w./%-]+}
+
+# Any delimiter works: %r|…|, %r(…), %r[…]
+version = %r(\d+\.\d+\.\d+)
+```
+
+```ruby Regexp.new
+# Compile a pattern from a string at runtime
+pattern = Regexp.new("hello", Regexp::IGNORECASE)
+pattern = Regexp.new("\\d+")  # note: double-escaped in string form
+```
+
+</CodeGroup>
+
+<Note>
+  Regexp literals are compiled once at parse time. `Regexp.new` compiles at runtime, which is useful when the pattern comes from user input or configuration, but slightly slower.
+</Note>
+
+## Matching operators
+
+### `=~` operator
+
+`=~` returns the character offset of the first match, or `nil` if there is no match. It also sets the global variables `$~`, `$1`, `$2`, etc.
+
+```ruby
+str = "Order #1042 placed on 2024-03-15"
+
+if str =~ /Order #(\d+)/
+  puts $1       # => "1042"
+  puts $~[0]    # => "Order #1042"  (full match via $~)
+  puts $~.begin(0)  # => 0  (start offset)
+end
+
+# Returns the offset or nil
+"hello" =~ /e/   # => 1
+"hello" =~ /z/   # => nil
+```
+
+### `match`
+
+`String#match` returns a `MatchData` object on success, or `nil`. It is safer than `=~` because the result is a local variable rather than global state.
+
+```ruby
+str = "Ruby 3.2.0 released"
+
+md = str.match(/(\w+) ([\d.]+)/)
+md[0]  # => "Ruby 3.2.0"   (full match)
+md[1]  # => "Ruby"          (first capture)
+md[2]  # => "3.2.0"         (second capture)
+
+# Safe navigation: nil if no match
+str.match(/Python/)  # => nil
+```
+
+### `match?`
+
+`match?` returns `true` or `false` without allocating a `MatchData` object or setting `$~`. Use it when you only need to know whether a pattern matches.
+
+```ruby
+"user@example.com".match?(/\A[\w.]+@[\w.]+\z/)  # => true
+"not-an-email".match?(/\A[\w.]+@[\w.]+\z/)       # => false
+```
+
+<Tip>
+  Prefer `match?` over `=~` in boolean checks. It avoids polluting global match variables and is measurably faster in hot paths.
+</Tip>
+
+### `scan`
+
+`String#scan` returns all non-overlapping matches as an array. With captures, it returns an array of arrays.
+
+```ruby
+"one 1 two 2 three 3".scan(/\d+/)
+# => ["1", "2", "3"]
+
+"2024-03-15 and 2024-04-01".scan(/(\d{4})-(\d{2})-(\d{2})/)
+# => [["2024", "03", "15"], ["2024", "04", "01"]]
+
+# With a block: yields each match
+"foo bar baz".scan(/\w+/) { |w| puts w.upcase }
+# FOO
+# BAR
+# BAZ
+```
+
+## Named and numbered captures
+
+### Numbered captures
+
+Captures are numbered left-to-right by opening parenthesis. They are accessible via `MatchData#[]`, or the globals `$1`, `$2`, … after `=~`.
+
+```ruby
+md = "2024-03-15".match(/(\d{4})-(\d{2})-(\d{2})/)
+md[1]  # => "2024"
+md[2]  # => "03"
+md[3]  # => "15"
+
+# Globals after =~
+"2024-03-15" =~ /(\d{4})-(\d{2})-(\d{2})/
+$1  # => "2024"
+$2  # => "03"
+$3  # => "15"
+```
+
+### Named captures
+
+Use `(?<name>…)` to label captures. Named captures are available via `MatchData#[]` with a symbol or string, and via `MatchData#named_captures`.
+
+```ruby
+pattern = /(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/
+md = "2024-03-15".match(pattern)
+
+md[:year]   # => "2024"
+md[:month]  # => "03"
+md[:day]    # => "15"
+
+md.named_captures
+# => {"year"=>"2024", "month"=>"03", "day"=>"15"}
+```
+
+<Note>
+  When you use named captures in a regex literal on the left-hand side of `=~`, Ruby automatically creates local variables with those names:
+
+  ```ruby
+  /(?<year>\d{4})-(?<month>\d{2})/ =~ "2024-03"
+  year   # => "2024"
+  month  # => "03"
+  ```
+
+  This only works with regex literals (not `Regexp.new`) on the left side of `=~`.
+</Note>
+
+## MatchData object
+
+`MatchData` carries everything about a successful match. You get it from `String#match`, `Regexp#match`, or `$~`.
+
+```ruby
+md = "hello world".match(/(?<first>\w+)\s+(?<second>\w+)/)
+
+# Full match and captures
+md[0]             # => "hello world"   (full match)
+md[1]             # => "hello"
+md[2]             # => "world"
+md[:first]        # => "hello"
+md[:second]       # => "world"
+
+# captures: numbered captures as an array (excludes full match)
+md.captures       # => ["hello", "world"]
+
+# named_captures: hash of name => value
+md.named_captures # => {"first"=>"hello", "second"=>"world"}
+
+# Context around the match
+md.pre_match      # => ""       (text before the match)
+md.post_match     # => ""       (text after the match)
+
+md2 = "say hello world now".match(/(?<first>\w+)\s+(?<second>\w+)/)
+md2.pre_match     # => "say "
+md2.post_match    # => " now"
+
+# Position information
+md.begin(0)       # => 0   (start of full match)
+md.end(0)         # => 11  (end of full match)
+md.begin(:first)  # => 0
+md.end(:first)    # => 5
+md.offset(1)      # => [0, 5]  ([begin, end] for capture 1)
+```
+
+## Regex options
+
+Options follow the closing delimiter of a regex literal or are passed as flags to `Regexp.new`.
+
+<CodeGroup>
+
+```ruby /i — case-insensitive
+"Hello".match?(/hello/i)   # => true
+"RUBY".match?(/ruby/i)     # => true
+
+# Regexp::IGNORECASE is the constant equivalent
+/ruby/i == Regexp.new("ruby", Regexp::IGNORECASE)  # => true
+```
+
+```ruby /m — multiline (dot matches newline)
+text = "first line\nsecond line"
+
+# Without /m: . does not match \n
+text.match?(/first.second/)    # => false
+
+# With /m: . matches any character including \n
+text.match?(/first.second/m)   # => true  (. crosses the newline)
+```
+
+```ruby /x — extended mode
+# /x allows whitespace and comments inside the pattern
+email = /
+  \A                # start of string
+  [\w.+-]+          # local part
+  @                 # at sign
+  [\w-]+            # domain name
+  \.                # dot
+  [a-z]{2,}         # TLD
+  \z                # end of string
+/ix                 # i: case-insensitive, x: extended
+
+"User@Example.COM".match?(email)  # => true
+```
+
+</CodeGroup>
+
+<Tip>
+  Use `/x` for complex patterns that would otherwise be unreadable. Comments and whitespace inside the pattern are ignored, so you can document each part of the expression.
+</Tip>
+
+## gsub with a block
+
+`String#gsub` replaces all matches. When given a block, it yields each matched string and uses the block's return value as the replacement.
+
+```ruby
+# Capitalize each word
+"hello world foo".gsub(/\w+/) { |w| w.capitalize }
+# => "Hello World Foo"
+
+# Use MatchData inside the block via $~
+"john smith".gsub(/(\w+)\s(\w+)/) do
+  "#{$2.capitalize}, #{$1.capitalize}"
+end
+# => "Smith, John"
+
+# Named captures are accessible as block-local variables
+"2024-03-15".gsub(/(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})/) do
+  "#{$~[:d]}/#{$~[:m]}/#{$~[:y]}"
+end
+# => "15/03/2024"
+
+# Replace with a hash: keys are matched strings, values are replacements
+"aeiou".gsub(/[aeiou]/, "a" => "@", "e" => "3", "i" => "!", "o" => "0", "u" => "v")
+# => "@3!0v"
+```
+
+<CodeGroup>
+
+```ruby sub — replace first match only
+"hello world".sub(/\w+/) { |w| w.upcase }
+# => "HELLO world"
+```
+
+```ruby gsub with back-references
+# \1, \2 etc. in the replacement string reference captures
+"John Smith".gsub(/(\w+) (\w+)/, '\2, \1')
+# => "Smith, John"
+```
+
+</CodeGroup>
+
+## String#split with regex
+
+`String#split` accepts a regex as the delimiter.
+
+```ruby
+# Split on one or more whitespace characters
+"one  two\tthree\nfour".split(/\s+/)
+# => ["one", "two", "three", "four"]
+
+# Split on a comma with optional surrounding whitespace
+"a, b,c ,  d".split(/\s*,\s*/)
+# => ["a", "b", "c", "d"]
+
+# Limit the number of segments
+"a:b:c:d".split(/:/, 3)
+# => ["a", "b", "c:d"]
+
+# Including the delimiter in results (use a capture group)
+"one1two2three".split(/(\d)/)
+# => ["one", "1", "two", "2", "three"]
+```
+
+## Common character classes
+
+| Pattern | Matches |
+|---------|---------|
+| `\d` | Decimal digit (`[0-9]`) |
+| `\D` | Non-digit |
+| `\w` | Word character (`[a-zA-Z0-9_]`) |
+| `\W` | Non-word character |
+| `\s` | Whitespace (space, tab, newline, etc.) |
+| `\S` | Non-whitespace |
+| `\A` | Start of string (not affected by `/m`) |
+| `\Z` | End of string, before optional final newline |
+| `\z` | Absolute end of string |
+| `\b` | Word boundary |
+| `\B` | Non-word boundary |
+| `.` | Any character except newline (or any char with `/m`) |
+
+```ruby
+# \d: digits
+"Order 42".scan(/\d+/)         # => ["42"]
+
+# \w: word characters
+"hello-world".scan(/\w+/)      # => ["hello", "world"]
+
+# \s: whitespace
+"one   two\tthree".split(/\s+/) # => ["one", "two", "three"]
+
+# \A and \z: anchor to full string (safer than ^ and $)
+"hello".match?(/\Ahello\z/)    # => true
+"  hello".match?(/\Ahello\z/)  # => false
+
+# \b: word boundary
+"foo foobar".scan(/\bfoo\b/)   # => ["foo"]  (not "foobar")
+```
+
+<Note>
+  Prefer `\A` and `\z` over `^` and `$` when validating entire strings. In Ruby, `^` and `$` match the start and end of *any line*, so `"foo\nbar" =~ /^bar$/` succeeds. `\A` and `\z` match only the very beginning and end of the entire string.
+</Note>

@@ -1,0 +1,88 @@
+---
+title: "Contributing to Ruby"
+description: "How to get involved with Ruby development — reporting issues, writing code, and improving documentation."
+---
+
+Ruby is an open-source project maintained by its community. There are several ways to contribute, whether you prefer triaging bugs, writing C code, improving documentation, or working on the standard library.
+
+## Ways to Contribute
+
+<CardGroup cols={2}>
+  <Card title="Report Issues" icon="bug" href="https://bugs.ruby-lang.org">
+    File bug reports and feature proposals on the Redmine issue tracker at bugs.ruby-lang.org.
+  </Card>
+  <Card title="Ruby Core" icon="code">
+    Build Ruby from source, run the test suite, and submit patches to the C runtime or built-in classes.
+  </Card>
+  <Card title="Documentation" icon="book-open" href="/contributing/documentation-guide">
+    Improve RDoc comments in C source files, add examples to core class docs, and write guides under `doc/`.
+  </Card>
+  <Card title="Standard Library" icon="box">
+    Each stdlib gem lives in its own repository. Contribute directly to the upstream gem and changes are mirrored into Ruby.
+  </Card>
+</CardGroup>
+
+## Contributing to Ruby Core
+
+To submit a patch to the Ruby interpreter or built-in classes, follow these steps in order:
+
+<Steps>
+  <Step title="Build Ruby">
+    Compile Ruby from source on your machine. See the [Building Ruby](/contributing/building-ruby) guide for full instructions.
+  </Step>
+  <Step title="Run the test suite">
+    Verify your build is correct by running the test suites. See [Testing Ruby](/contributing/testing) for the available `make` targets.
+  </Step>
+  <Step title="Make your changes">
+    Edit C or Ruby source files, add tests, and follow the [code and commit style guidelines](/contributing/making-changes).
+  </Step>
+  <Step title="Open a pull request">
+    Submit your changes as a pull request on [GitHub](https://github.com/ruby/ruby). CI runs automatically on each PR.
+  </Step>
+</Steps>
+
+## Contributing Pages
+
+<CardGroup cols={2}>
+  <Card title="Building Ruby" icon="hammer" href="/contributing/building-ruby">
+    Clone the repo, install dependencies, configure, and compile CRuby.
+  </Card>
+  <Card title="Testing Ruby" icon="flask" href="/contributing/testing">
+    Run bootstraptest, test-all, ruby-spec, and bundler specs.
+  </Card>
+  <Card title="Making Changes" icon="code-pull-request" href="/contributing/making-changes">
+    Code style, commit messages, patch submission, and the review process.
+  </Card>
+  <Card title="Documentation Guide" icon="pencil" href="/contributing/documentation-guide">
+    RDoc syntax, where docs live, how to preview, and writing standards.
+  </Card>
+</CardGroup>
+
+## Issue Tracker
+
+Bug reports and feature proposals are managed on the Redmine instance at [bugs.ruby-lang.org](https://bugs.ruby-lang.org).
+
+- Search for existing issues before filing a new one.
+- Set the Tracker field to **Bug** or **Feature** as appropriate.
+- Include the output of `ruby -v` and a minimal reproduction script.
+
+<Note>
+  Security vulnerabilities should **not** be filed on the public issue tracker. Follow the [security reporting instructions](https://www.ruby-lang.org/en/security/) instead.
+</Note>
+
+## Mailing Lists
+
+Ruby development discussion takes place on two mailing lists:
+
+| List | Purpose |
+|---|---|
+| **ruby-core** | Technical discussion about the Ruby interpreter and standard library |
+| **ruby-talk** | General Ruby discussion, announcements, and community topics |
+
+You can browse and subscribe to both lists at [www.ruby-lang.org/en/community/mailing-lists](https://www.ruby-lang.org/en/community/mailing-lists/).
+
+## Community and Code of Conduct
+
+Ruby's community follows a friendly and collaborative culture. When participating in mailing lists, the issue tracker, or pull requests, keep discussions technical and respectful.
+
+The Ruby community does not maintain a separate formal code of conduct document, but the core team has the discretion to moderate behavior that is harmful to the project or its members.

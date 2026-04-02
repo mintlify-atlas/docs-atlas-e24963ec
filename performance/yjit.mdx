@@ -1,0 +1,230 @@
+---
+title: "YJIT"
+description: "Yet Another Ruby JIT — Ruby's built-in just-in-time compiler for faster execution."
+---
+
+YJIT is a lightweight, minimalistic JIT compiler built directly into CRuby. It lazily compiles Ruby bytecode to native machine code using a **Basic Block Versioning (BBV)** architecture, which allows the compiler to specialize generated code on the types it observes at runtime without requiring a full type analysis pass.
+
+## Supported platforms
+
+YJIT supports macOS, Linux, and BSD on the following CPU architectures:
+
+- **x86-64** (Intel/AMD 64-bit)
+- **arm64 / aarch64** (Apple Silicon, AWS Graviton, etc.)
+
+<Note>
+YJIT is not available on 32-bit platforms or non-x86/ARM architectures.
+</Note>
+
+## Requirements
+
+Before building YJIT, you need the Rust compiler in addition to the standard Ruby build tools.
+
+- **`rustc` >= 1.58.0** — obtain via your OS package manager or [rustup](https://www.rust-lang.org/tools/install)
+- **`cargo`** — only required for dev/debug builds
+
+<Tip>
+If you are not modifying YJIT's Rust source, install `rustc` through your OS package manager. It will typically reuse the same vendor that provides your C toolchain, avoiding version conflicts.
+</Tip>
+
+## Enabling YJIT
+
+There are three ways to enable YJIT:
+
+<Steps>
+  <Step title="Command-line flag">
+    Pass `--yjit` when invoking Ruby:
+
+    ```bash
+    ruby --yjit myscript.rb
+    ```
+  </Step>
+  <Step title="Environment variable">
+    Set `RUBY_YJIT_ENABLE=1` in your environment. Useful for deployment scripts where adding a command-line flag is not practical:
+
+    ```bash
+    RUBY_YJIT_ENABLE=1 ruby myscript.rb
+    ```
+  </Step>
+  <Step title="Ruby API (lazy enable)">
+    Call `RubyVM::YJIT.enable` from within your application. This lets you enable YJIT only after the application has finished booting, so startup/initialization code is never compiled by the JIT:
+
+    ```ruby
+    # In a Unicorn after_fork hook, Puma on_worker_boot, etc.
+    RubyVM::YJIT.enable
+    ```
+  </Step>
+</Steps>
+
+### Verifying YJIT is active
+
+```bash
+ruby --yjit -v
+# ruby 3.3.0dev (2023-01-31T15:11:10Z master 2a0bf269c9) +YJIT dev [x86_64-darwin22]
+```
+
+The `+YJIT` tag in the version string confirms YJIT is compiled in and enabled. You can also check at runtime:
+
+```ruby
+ruby --yjit -e "p RubyVM::YJIT.enabled?"
+# true
+
+ruby -e "RubyVM::YJIT.enable; p RubyVM::YJIT.enabled?"
+# true
+```
+
+## Command-line options
+
+YJIT extends the standard Ruby CLI with the following options:
+
+| Option | Description |
+|---|---|
+| `--yjit` | Enable YJIT (disabled by default) |
+| `--yjit-mem-size=N` | Soft memory limit in MiB covering code and metadata (default: 128) |
+| `--yjit-exec-mem-size=N` | Hard limit on the executable code region in MiB |
+| `--yjit-call-threshold=N` | Calls before a method is compiled (default: 30; rises to 120 at 40k ISEQs) |
+| `--yjit-cold-threshold=N` | Global calls after which an ISEQ is considered cold and skipped (default: 200k) |
+| `--yjit-stats` | Print runtime statistics on exit |
+| `--yjit-stats=quiet` | Collect statistics without printing; access via `RubyVM::YJIT.runtime_stats` |
+| `--yjit-log[=file\|dir]` | Log compilation events; omit path to print last 1024 entries to stderr |
+| `--yjit-log=quiet` | Collect a circular compilation log buffer accessible via `RubyVM::YJIT.log` |
+| `--yjit-disable` | Start Ruby with YJIT disabled while still accepting `--yjit-*` tuning options |
+| `--yjit-code-gc` | Re-compile from scratch when the executable memory limit is hit |
+| `--yjit-perf` | Enable frame pointers and Linux `perf` profiling support |
+| `--yjit-trace-exits` | Dump backtraces for every JIT exit (implies `--yjit-stats`) |
+| `--yjit-trace-exits-sample-rate=N` | Trace every Nth exit (implies `--yjit-trace-exits`) |
+
+## Ruby API
+
+### `RubyVM::YJIT.enable`
+
+Enables YJIT at runtime. Calling this after boot avoids compiling initialization code:
+
+```ruby
+RubyVM::YJIT.enable
+puts RubyVM::YJIT.enabled? # => true
+```
+
+### `RubyVM::YJIT.runtime_stats`
+
+Returns a hash of runtime statistics. Requires `--yjit-stats` or `--yjit-stats=quiet`:
+
+```ruby
+# Run with: RUBYOPT="--yjit-stats" irb
+RubyVM::YJIT.runtime_stats
+# =>
+# { inline_code_size: 340745,
+#   outlined_code_size: 297664,
+#   all_stats: true,
+#   yjit_insns_count: 1547816,
+#   ratio_in_yjit: 98.7,
+#   side_exit_count: 842,
+#   total_exit_count: 1043,
+#   avg_len_in_yjit: 14.3,
+#   compiled_iseq_count: 1201,
+#   code_gc_count: 0,
+#   ... }
+```
+
+Key counters:
+
+| Counter | Description |
+|---|---|
+| `:ratio_in_yjit` | Percentage of YARV instructions executed by YJIT vs the interpreter |
+| `:yjit_insns_count` | Total Ruby bytecode instructions executed in JIT code |
+| `:compiled_iseq_count` | Number of bytecode sequences compiled |
+| `:inline_code_size` | Bytes of main-line machine code |
+| `:outlined_code_size` | Bytes of less-frequently-executed machine code |
+| `:side_exit_count` | Number of side exits taken at runtime |
+| `:total_exit_count` | Total exits including side exits |
+| `:avg_len_in_yjit` | Average compiled-block length before exiting to interpreter |
+| `:code_gc_count` | Number of times compiled code was discarded due to memory pressure |
+
+### `RubyVM::YJIT.disasm`
+
+Prints the machine code generated for a method (requires the method to have been compiled first):
+
+```ruby
+def add(a, b) = a + b
+100.times { add(1, 2) }   # warm up so YJIT compiles it
+puts RubyVM::YJIT.disasm(method(:add))
+```
+
+## Performance tips for production
+
+### Maximize `ratio_in_yjit`
+
+The `ratio_in_yjit` stat shows what fraction of instructions run through JIT code. Aim for ≥ 99%.
+
+<Tip>
+If `ratio_in_yjit` is low, try increasing `--yjit-mem-size`. More memory means more methods can stay compiled.
+</Tip>
+
+```bash
+RUBYOPT="--yjit --yjit-stats" ruby app.rb
+```
+
+### Keep workers alive longer
+
+YJIT pays a compilation cost when a method is first warmed up. If worker processes are killed too frequently (e.g. by `unicorn-worker-killer` or `puma_worker_killer`), compilation overhead can outweigh the speedup.
+
+<Tip>
+Monitor requests-per-process and reduce kill frequency or increase request limits to give YJIT more time to warm up.
+</Tip>
+
+### Enable YJIT after boot
+
+Use `RubyVM::YJIT.enable` (or `--yjit-disable` combined with `--yjit-*` tuning flags) so that boot-time code is not compiled, reducing both startup time and memory usage.
+
+```ruby
+# config/unicorn.rb
+after_fork do |_server, _worker|
+  RubyVM::YJIT.enable
+end
+```
+
+### Write YJIT-friendly code
+
+Profile your application with [stackprof](https://github.com/tmm1/stackprof) first, then apply these tips only to hot methods:
+
+- Avoid `OpenStruct` — it defeats type specialization
+- Avoid redefining basic integer operators (`+`, `-`, `<`, `>`, etc.)
+- Avoid redefining `nil`, equality, or other core semantics
+- Minimize object allocation in hot paths
+- Reduce indirection: avoid thin wrapper classes and pass-through methods
+- Keep variables and method arguments monomorphic (same type at each call site)
+- Avoid `TracePoint` and `binding` in hot code — both trigger deoptimization
+
+Use `--yjit-stats` to identify which bytecodes cause the most exits, then refactor to avoid them in your hottest methods.
+
+## Reducing YJIT memory usage
+
+YJIT allocates memory for both compiled code and associated metadata. If memory is constrained:
+
+- **Lower `--yjit-mem-size`** — reduces the total allowed footprint (default: 128 MiB). Monitor `ratio_in_yjit` to confirm you are not sacrificing too much coverage.
+- **Enable YJIT lazily** — call `RubyVM::YJIT.enable` after boot so initialization code is never compiled.
+- **Enable `--yjit-code-gc`** — discards all compiled code when the limit is hit and restarts JIT compilation. This trades a brief performance dip for a lower steady-state footprint.
+
+<Warning>
+`--yjit-code-gc` is disabled by default in Ruby 3.3+. Enable it only if you are operating under tight memory limits and can tolerate occasional recompilation pauses.
+</Warning>
+
+## Limitations
+
+- **Platform support**: macOS, Linux, and BSD on x86-64 and arm64/aarch64 only.
+- **Memory overhead**: JIT code and metadata require additional memory beyond the interpreter baseline. Tune `--yjit-mem-size` to fit your environment.
+- **Warmup period**: Performance gains require the JIT to compile methods. Short-lived processes or rapidly recycled workers may not benefit.
+- **Incompatible features**: `TracePoint`, `binding`, and certain meta-programming patterns cause YJIT to deoptimize or skip compilation.
+
+## ZJIT: the next-generation JIT
+
+ZJIT is a method-based JIT compiler for Ruby currently in active development alongside YJIT. Unlike YJIT's Basic Block Versioning approach, ZJIT uses profiling information gathered by the interpreter to guide aggressive optimization through a high-level intermediate representation (HIR).
+
+<Note>
+ZJIT requires **Rust 1.85.0** or later and is enabled with `--zjit`. It is an experimental prototype — YJIT remains the recommended JIT for production workloads today.
+</Note>
+
+```bash
+./configure --enable-zjit
+ruby --zjit myscript.rb
+```

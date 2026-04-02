@@ -1,0 +1,432 @@
+---
+title: "Classes and Modules"
+description: "Object-oriented programming in Ruby: classes, modules, mixins, inheritance, and metaprogramming."
+---
+
+Ruby is a purely object-oriented language. Everything is an object, and all behavior is defined through classes and modules.
+
+## Class Definition
+
+A class bundles state (instance variables) and behavior (methods) together.
+
+```ruby
+class Person
+  def initialize(name, age)
+    @name = name
+    @age  = age
+  end
+
+  def to_s
+    "#{@name} (#{@age})"
+  end
+end
+
+alice = Person.new("Alice", 30)
+puts alice   # => Alice (30)
+```
+
+### attr_accessor, attr_reader, attr_writer
+
+Instead of writing getter and setter methods by hand, Ruby provides declarative helpers.
+
+```ruby
+class Product
+  attr_accessor :name, :price  # generates getter + setter
+  attr_reader   :id            # generates getter only
+  attr_writer   :stock         # generates setter only
+
+  def initialize(id, name, price)
+    @id    = id
+    @name  = name
+    @price = price
+    @stock = 0
+  end
+end
+
+p = Product.new(1, "Widget", 9.99)
+p.name           # => "Widget"
+p.name = "Gadget"
+p.price = 14.99
+p.stock = 50
+p.id             # => 1
+# p.id = 2       # => NoMethodError (no setter)
+```
+
+## Inheritance
+
+Use `<` to inherit from a parent class. Ruby supports single inheritance; mixins handle multiple inheritance.
+
+```ruby
+class Animal
+  attr_reader :name
+
+  def initialize(name)
+    @name = name
+  end
+
+  def speak
+    raise NotImplementedError, "#{self.class} must implement #speak"
+  end
+
+  def to_s
+    "#{self.class.name} named #{@name}"
+  end
+end
+
+class Dog < Animal
+  def speak
+    "Woof!"
+  end
+end
+
+class Cat < Animal
+  def speak
+    "Meow!"
+  end
+end
+
+dog = Dog.new("Rex")
+dog.speak   # => "Woof!"
+puts dog    # => Dog named Rex
+```
+
+### Calling the Parent with `super`
+
+```ruby
+class Employee < Person
+  attr_reader :role
+
+  def initialize(name, age, role)
+    super(name, age)   # calls Person#initialize
+    @role = role
+  end
+
+  def to_s
+    "#{super} — #{@role}"
+  end
+end
+
+emp = Employee.new("Bob", 40, "Engineer")
+puts emp   # => Bob (40) — Engineer
+```
+
+## Modules
+
+Modules serve two purposes: **namespacing** (grouping related constants and methods) and **mixins** (sharing behavior across classes).
+
+### Modules as Namespaces
+
+```ruby
+module Payments
+  class Invoice
+    attr_reader :amount
+
+    def initialize(amount)
+      @amount = amount
+    end
+  end
+
+  class Receipt
+    def initialize(invoice)
+      @invoice = invoice
+    end
+
+    def summary
+      "Paid: $#{@invoice.amount}"
+    end
+  end
+
+  TAX_RATE = 0.08
+end
+
+inv     = Payments::Invoice.new(100)
+receipt = Payments::Receipt.new(inv)
+receipt.summary   # => "Paid: $100"
+Payments::TAX_RATE  # => 0.08
+```
+
+### Mixins: include, extend, prepend
+
+<Tabs>
+  <Tab title="include">
+    `include` adds module methods as **instance methods** on the class.
+
+    ```ruby
+    module Greetable
+      def greet
+        "Hello, I'm #{name}!"
+      end
+    end
+
+    class User
+      include Greetable
+      attr_reader :name
+
+      def initialize(name)
+        @name = name
+      end
+    end
+
+    User.new("Alice").greet  # => "Hello, I'm Alice!"
+    ```
+  </Tab>
+  <Tab title="extend">
+    `extend` adds module methods as **class methods** (or as singleton methods on a specific object).
+
+    ```ruby
+    module ClassMethods
+      def description
+        "I am the #{name} class"
+      end
+    end
+
+    class Widget
+      extend ClassMethods
+    end
+
+    Widget.description   # => "I am the Widget class"
+
+    # extend on an object instance
+    obj = Object.new
+    obj.extend(ClassMethods)
+    obj.description      # => "I am the Object class"
+    ```
+  </Tab>
+  <Tab title="prepend">
+    `prepend` inserts the module **before** the class in the method lookup chain, allowing you to wrap existing methods.
+
+    ```ruby
+    module Logging
+      def speak
+        puts "#{self.class}#speak called"
+        result = super
+        puts "#{self.class}#speak returned: #{result}"
+        result
+      end
+    end
+
+    class Dog < Animal
+      prepend Logging
+
+      def speak
+        "Woof!"
+      end
+    end
+
+    Dog.new("Rex").speak
+    # Dog#speak called
+    # Dog#speak returned: Woof!
+    # => "Woof!"
+    ```
+  </Tab>
+</Tabs>
+
+## Class Methods
+
+Define class methods with `self.` prefix, or inside a `class << self` block.
+
+```ruby
+class Config
+  @@instances = []
+
+  def self.all
+    @@instances
+  end
+
+  def self.count
+    @@instances.size
+  end
+
+  def initialize(name)
+    @name = name
+    @@instances << self
+  end
+
+  # Alternative: define multiple class methods at once
+  class << self
+    def reset
+      @@instances.clear
+    end
+
+    def find(name)
+      @@instances.find { |c| c.name == name }
+    end
+  end
+
+  attr_reader :name
+end
+
+Config.new("development")
+Config.new("production")
+Config.count   # => 2
+Config.all     # => [#<Config ...>, #<Config ...>]
+```
+
+## Method Visibility
+
+Ruby has three visibility levels: `public` (default), `protected`, and `private`.
+
+```ruby
+class BankAccount
+  def initialize(balance)
+    @balance = balance
+  end
+
+  # Public — callable from anywhere
+  def deposit(amount)
+    @balance += amount
+  end
+
+  def >(other)
+    balance > other.balance
+  end
+
+  # Protected — callable from instances of the same class or subclasses
+  protected
+
+  def balance
+    @balance
+  end
+
+  # Private — callable only within the object itself (no explicit receiver)
+  private
+
+  def log_transaction(msg)
+    puts "[LOG] #{msg}"
+  end
+end
+
+account = BankAccount.new(1000)
+account.deposit(500)
+# account.balance      # => NoMethodError (protected)
+# account.log_transaction("x") # => NoMethodError (private)
+```
+
+<Note>
+  In Ruby, `private` methods can still be called with an implicit receiver (`self`) inside the object. They cannot be called with an explicit receiver, even `self` (before Ruby 2.7).
+</Note>
+
+## Open Classes (Monkey Patching)
+
+Ruby classes are always open — you can reopen them and add or modify methods at any time.
+
+```ruby
+# Adding methods to a built-in class
+class Integer
+  def factorial
+    return 1 if self <= 1
+    self * (self - 1).factorial
+  end
+end
+
+5.factorial   # => 120
+
+# Adding methods to String
+class String
+  def palindrome?
+    self == self.reverse
+  end
+end
+
+"racecar".palindrome?  # => true
+"hello".palindrome?    # => false
+```
+
+<Warning>
+  Monkey patching can cause surprising conflicts when multiple libraries modify the same class. Prefer **refinements** (`Module#refine`) for scoped modifications in library code.
+</Warning>
+
+## Metaprogramming
+
+### define_method
+
+`define_method` lets you create methods dynamically at runtime.
+
+```ruby
+class Status
+  STATES = [:pending, :active, :suspended, :cancelled]
+
+  STATES.each do |state|
+    define_method(:"#{state}?") do
+      @state == state
+    end
+
+    define_method(:"#{state}!") do
+      @state = state
+    end
+  end
+
+  def initialize
+    @state = :pending
+  end
+end
+
+s = Status.new
+s.pending?    # => true
+s.active!
+s.active?     # => true
+s.pending?    # => false
+```
+
+### respond_to?
+
+Check whether an object responds to a given method before calling it.
+
+```ruby
+class FlexibleLogger
+  def log(message)
+    puts "[LOG] #{message}"
+  end
+end
+
+logger = FlexibleLogger.new
+logger.respond_to?(:log)       # => true
+logger.respond_to?(:warn)      # => false
+
+# Guard before calling
+def safe_log(obj, msg)
+  if obj.respond_to?(:log)
+    obj.log(msg)
+  else
+    puts "Object does not support logging"
+  end
+end
+```
+
+### method_missing
+
+`method_missing` is called when Ruby cannot find a method. Override it to implement dynamic dispatch.
+
+```ruby
+class DynamicRecord
+  def initialize(attributes)
+    @attributes = attributes
+  end
+
+  def method_missing(name, *args)
+    key = name.to_s.delete_suffix("=").to_sym
+    if name.to_s.end_with?("=")
+      @attributes[key] = args.first
+    elsif @attributes.key?(key)
+      @attributes[key]
+    else
+      super
+    end
+  end
+
+  def respond_to_missing?(name, include_private = false)
+    key = name.to_s.delete_suffix("=").to_sym
+    @attributes.key?(key) || super
+  end
+end
+
+record = DynamicRecord.new(name: "Alice", age: 30)
+record.name      # => "Alice"
+record.age       # => 30
+record.age = 31
+record.age       # => 31
+```
+
+<Tip>
+  Always pair `method_missing` with `respond_to_missing?` so that `respond_to?` and other reflection methods behave correctly.
+</Tip>

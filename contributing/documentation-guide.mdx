@@ -1,0 +1,307 @@
+---
+title: "Documentation Guide"
+description: "How to write and contribute to Ruby's official documentation."
+---
+
+Ruby's documentation is written in **RDoc** format and lives alongside the source code. This guide explains where docs live, how to write them, and how to preview your changes.
+
+## Where Documentation Lives
+
+| Location | Format | What it covers |
+|---|---|---|
+| C source files (`*.c`) | RDoc comment blocks | Core classes and methods written in C |
+| Ruby source files (`*.rb`) | RDoc comment blocks | Pure-Ruby methods and stdlib |
+| `doc/*.rdoc` / `doc/*.md` | RDoc or Markdown | Standalone guides and topic pages |
+| `doc/contributing/` | Markdown | Contribution guides (like this one) |
+
+For C-coded methods, RDoc cannot automatically determine the method signature, so you must supply it explicitly using the `call-seq:` directive.
+
+## Generating Documentation
+
+From inside your `build/` directory:
+
+<CodeGroup>
+  ```bash Build HTML once
+  make html
+  ```
+
+  ```bash Live-reload server
+  make html-server
+  ```
+</CodeGroup>
+
+The `make html` target writes output to `{build}/.ext/html/`. The live-reload server starts at `http://localhost:4000` and refreshes automatically when you edit a source file. To use a different port:
+
+```bash
+make html-server RDOC_SERVER_PORT=8080
+```
+
+<Note>
+  If you do not have a build directory yet, follow the [Quick Start guide](/contributing/building-ruby#quick-start) through step 4 (configure) before running `make html`.
+</Note>
+
+## RDoc Syntax Essentials
+
+Ruby uses [RDoc](https://ruby.github.io/rdoc/) as its primary documentation format. RDoc comments appear immediately above the method or class they document, prefixed with `#` in Ruby files or `/*` ... `*/` in C files.
+
+### Basic Formatting
+
+```ruby
+# Returns the uppercase version of +str+.
+#
+# Example:
+#
+#   "hello".upcase  # => "HELLO"
+#
+# Related: String#downcase, String#swapcase.
+def upcase
+  # ...
+end
+```
+
+```c
+/*
+ * call-seq:
+ *   upcase -> new_string
+ *
+ * Returns the uppercase version of +str+.
+ *
+ * Example:
+ *
+ *   "hello".upcase  # => "HELLO"
+ *
+ */
+static VALUE
+rb_str_upcase(VALUE str)
+{
+    /* ... */
+}
+```
+
+### Text Markup
+
+| Syntax | Renders as |
+|---|---|
+| `*bold*` | **bold** |
+| `_italic_` | *italic* |
+| `+monofont+` | `monofont` (suppresses auto-linking) |
+| `\Float` | Float (suppresses auto-linking) |
+
+Use `+monofont+` for variable names, argument names, return values, and inline code that is not a class/method reference.
+
+### Auto-Linking
+
+RDoc automatically creates links for class names, module names, and method references:
+
+```rdoc
+- Float
+- Enumerable
+- File.new
+- File#read
+- Array#[]
+```
+
+Suppress auto-linking with a backslash prefix when the word does not refer to a Ruby entity, or when referring to the class being documented itself:
+
+```rdoc
+\Class variables can be tricky.
+A +Float+ object represents a real number.
+```
+
+### Code Blocks
+
+Indent code examples by at least 2 extra spaces relative to the surrounding comment text to create a verbatim block:
+
+```ruby
+# Returns the element at the given index.
+#
+#   a = [:foo, :bar, :baz]
+#   a[0]   # => :foo
+#   a[-1]  # => :baz
+```
+
+### Lists
+
+```rdoc
+- An unordered item
+- Another item
+
+1. A numbered item
+2. Another numbered item
+
+[label]  A labeled list item used for argument descriptions.
+```
+
+### Headings
+
+Use headings (`=`, `==`, `===`) to organize long class or module documentation. Do not use headings inside method documentation — use bold text as pseudo-headings instead.
+
+## The `call-seq:` Directive
+
+For methods written in C, RDoc cannot infer the signature. Use `call-seq:` to document it explicitly.
+
+**Singleton method:**
+
+```c
+/*
+ * call-seq:
+ *   Hash.new(default_value = nil) -> new_hash
+ *   Hash.new {|hash, key| ... } -> new_hash
+ */
+```
+
+**Instance method (omit the class prefix, just as RDoc does for Ruby methods):**
+
+```c
+/*
+ * call-seq:
+ *   count -> integer
+ *   count(obj) -> integer
+ *   count {|element| ... } -> integer
+ */
+```
+
+**Return type conventions:**
+
+| Return value | Convention |
+|---|---|
+| Returns receiver | `-> self` |
+| Returns same class (new object) | `-> new_array` |
+| Multiple possible types | `-> integer or nil` |
+| Any object | `-> object` |
+
+If a method accepts an optional block and returns an Enumerator when no block is given, show both forms:
+
+```rdoc
+*  call-seq:
+*    select {|element| ... } -> new_array
+*    select -> new_enumerator
+```
+
+## The `:nodoc:` Directive
+
+Mark a class, module, or method as excluded from documentation output:
+
+```ruby
+class InternalHelper # :nodoc:
+end
+
+def internal_method # :nodoc:
+end
+```
+
+Use `:nodoc: all` to exclude a class and all its children.
+
+## The `rdoc-ref:` Scheme
+
+Use `rdoc-ref:` for cross-references within the Ruby documentation:
+
+```rdoc
+See rdoc-ref:String#upcase for details.
+See rdoc-ref:RubyVM::YJIT for JIT options.
+```
+
+Use `rdoc-ref:` for:
+- Links from core docs to other core docs
+- Links from core docs to stdlib docs
+- Links within a single stdlib package
+
+Use a full URL (`https://docs.ruby-lang.org/en/master/...`) for links from a stdlib package back to the core, or to a different stdlib package. This ensures the link works when the package is built independently.
+
+## Documenting Classes and Modules
+
+Structure class and module documentation as:
+
+1. **Synopsis** — one or two sentences describing what the class does and why you'd use it
+2. **Common uses with examples**
+3. **"What's Here" summary** (optional, for large classes with many methods)
+
+```ruby
+# A +Fruit+ represents a piece of fruit with a name and color.
+#
+# == Creating a Fruit
+#
+#   apple = Fruit.new("Apple", :red)
+#   apple.name   # => "Apple"
+#   apple.color  # => :red
+#
+# == What's Here
+#
+# - ::new: Creates a new Fruit.
+# - #name: Returns the fruit's name.
+# - #color: Returns the fruit's color.
+class Fruit
+```
+
+## Documenting Methods
+
+The recommended structure for method documentation:
+
+1. **Calling sequence** (C methods only, via `call-seq:`)
+2. **Synopsis** — one sentence describing what the method does
+3. **In-brief examples** (optional, for lengthy docs)
+4. **Details and examples**
+5. **Argument descriptions** (if not obvious from the signature)
+6. **Corner cases and exceptions** (only document non-obvious ones)
+7. **Related methods** (optional, at most three)
+
+```ruby
+# Returns a count of specified elements.
+#
+#   a = [:foo, :bar, :foo, :baz]
+#   a.count              # => 4
+#   a.count(:foo)        # => 2
+#   a.count {|e| e == :foo } # => 2
+#
+# With no block given, returns a new Enumerator.
+#
+# Related: Array#tally, Array#sum.
+def count(...)
+```
+
+## Using Examples from irb
+
+When showing return values inline, align the `# =>` markers for readability:
+
+```ruby
+a = [1, 2, 3]  # => [1, 2, 3]
+a.shuffle!      # => [2, 3, 1]
+a               # => [2, 3, 1]
+```
+
+## Handling Non-ASCII Characters in C Files
+
+C source files must use only US-ASCII characters. If you need non-ASCII characters in documentation for a C-coded class:
+
+**For a class or module**, create a `doc/<name>.rdoc` file:
+
+```ruby
+# Documentation with non-ASCII characters like "résumé" goes here.
+class Foo; end
+```
+
+**For a method**, keep the `call-seq:` in the C file and use `:include:` to pull in an rdoc file:
+
+```c
+/*
+ *  call-seq:
+ *    each_byte {|byte| ... } -> self
+ *    each_byte               -> enumerator
+ *
+ *  :include: doc/string/each_byte.rdoc
+ *
+ */
+```
+
+## General Writing Guidelines
+
+- Write short, declarative, or imperative sentences.
+- Keep in mind that readers may not be fluent in English; avoid idioms and culture-specific references.
+- Use simple verb tenses: simple present, simple past, simple future.
+- Group sentences into short paragraphs, each covering a single topic.
+- Do not use HTML tags in RDoc — the `ri` tool does not render them.
+- Avoid building tables with HTML; use verbatim text blocks or GFM tables in Markdown files instead.
+
+<Tip>
+  The goal of documentation is to convey the most important information in the shortest time. Provide enough detail for the reader to understand and use the code, but avoid padding with examples that merely restate what the synopsis already said.
+</Tip>

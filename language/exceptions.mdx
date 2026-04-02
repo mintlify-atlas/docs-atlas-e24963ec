@@ -1,0 +1,386 @@
+---
+title: "Exceptions"
+description: "Raise, rescue, and handle exceptions in Ruby programs."
+---
+
+Ruby code can raise exceptions to signal unusual or error conditions. An exception transfers program execution to a handler — or, if no handler exists, prints a message and exits the program.
+
+```ruby
+File.open('nope.txt')
+# => Errno::ENOENT: No such file or directory @ rb_sysopen - nope.txt
+```
+
+## Raising Exceptions
+
+Use `Kernel#raise` (aliased as `fail`) to raise an exception.
+
+<Tabs>
+  <Tab title="Basic raise">
+    ```ruby
+    # Raises RuntimeError with a message
+    raise "Something went wrong"
+
+    # Raises a specific exception class
+    raise ArgumentError, "invalid argument"
+
+    # Raises with an existing exception object
+    raise RuntimeError.new("explicit object")
+
+    # Re-raises the current exception (inside rescue)
+    begin
+      1 / 0
+    rescue ZeroDivisionError
+      # log it, then re-raise the original exception
+      raise
+    end
+    ```
+  </Tab>
+  <Tab title="raise vs fail">
+    `raise` and `fail` are identical in behavior. Community convention uses `fail` to signal expected failure conditions and `raise` to re-raise or signal programming errors, but this is not enforced by the language.
+
+    ```ruby
+    def divide(a, b)
+      fail ArgumentError, "divisor cannot be zero" if b.zero?
+      a / b
+    end
+
+    divide(10, 0)  # => ArgumentError: divisor cannot be zero
+    ```
+  </Tab>
+</Tabs>
+
+## Rescue Clauses
+
+An exception handler uses `begin`/`rescue`/`end`. When an exception is raised inside the `begin` block, Ruby checks each `rescue` clause in order.
+
+```ruby
+begin
+  raise 'Boom!'                # raises RuntimeError
+  puts 'Will not get here.'
+rescue
+  puts 'Rescued an exception.' # control transferred here
+end
+puts 'Got here.'
+
+# Output:
+# Rescued an exception.
+# Got here.
+```
+
+<Note>
+  A bare `rescue` with no class specified catches `StandardError` and all its subclasses.
+</Note>
+
+### Rescuing Specific Exception Types
+
+```ruby
+begin
+  1 / 0   # raises ZeroDivisionError (a subclass of StandardError)
+rescue ZeroDivisionError => e
+  puts e.class    # => ZeroDivisionError
+  puts e.message  # => divided by 0
+end
+```
+
+Specify multiple exception types on one `rescue` line, or use multiple rescue clauses:
+
+```ruby
+begin
+  Dir.open('nosuch')
+rescue Errno::ENOTDIR
+  puts "Not a directory"
+rescue Errno::ENOENT
+  puts "No such file or directory"
+end
+# => No such file or directory
+```
+
+```ruby
+begin
+  risky_operation
+rescue FloatDomainError, ZeroDivisionError => e
+  puts "Math error: #{e.message}"
+rescue IOError, Errno::ENOENT => e
+  puts "IO error: #{e.message}"
+end
+```
+
+### Capturing the Rescued Exception
+
+Use `=> variable` to bind the exception object:
+
+```ruby
+begin
+  1 / 0
+rescue => x
+  puts x.class    # => ZeroDivisionError
+  puts x.message  # => divided by 0
+end
+```
+
+### Exception Global Variables
+
+Two read-only globals are set inside any rescue clause:
+
+| Variable | English module synonym | Contains |
+|----------|----------------------|----------|
+| `$!` | `$ERROR_INFO` | The rescued exception object |
+| `$@` | `$ERROR_POSITION` | Array of backtrace position strings |
+
+```ruby
+begin
+  1 / 0
+rescue
+  p $!   # => #<ZeroDivisionError: divided by 0>
+  p $@   # => ["t.rb:2:in 'Integer#/'", "t.rb:2:in '<main>'"]
+end
+```
+
+## The Full Handler Structure
+
+A complete exception handler has four optional sections after the begin clause.
+
+```ruby
+def foo(boom: false)
+  puts 'Begin.'
+  raise 'Boom!' if boom
+rescue ArgumentError => e
+  puts "ArgumentError: #{e.message}"
+rescue => e
+  puts "Rescued: #{e.message}"
+else
+  puts 'No exception raised.'
+ensure
+  puts 'Always runs.'
+end
+
+foo(boom: true)
+# Begin.
+# Rescued: Boom!
+# Always runs.
+
+foo(boom: false)
+# Begin.
+# No exception raised.
+# Always runs.
+```
+
+<Tabs>
+  <Tab title="rescue">
+    Runs when an exception matching the specified class (or `StandardError`) is raised. Multiple rescue clauses are checked in order; only the first match executes.
+  </Tab>
+  <Tab title="else">
+    Runs only when **no exception** was raised in the begin block. Useful to separate the "success path" from rescue handling.
+
+    ```ruby
+    begin
+      result = compute_value
+    rescue => e
+      handle_error(e)
+    else
+      # result is valid here — no exception occurred
+      save_result(result)
+    end
+    ```
+  </Tab>
+  <Tab title="ensure">
+    Runs **always** — whether or not an exception was raised or rescued. Use it to release resources.
+
+    ```ruby
+    file = File.open("data.txt")
+    begin
+      process(file)
+    rescue IOError => e
+      puts "IO error: #{e.message}"
+    ensure
+      file.close   # always closes the file
+    end
+    ```
+  </Tab>
+</Tabs>
+
+## Begin-Less Exception Handlers
+
+A `begin` block is not required. Method bodies and blocks serve as implicit exception handlers.
+
+<CodeGroup>
+```ruby Method body
+def safe_divide(a, b)
+  a / b
+rescue ZeroDivisionError
+  puts "Cannot divide by zero"
+  nil
+end
+
+safe_divide(10, 2)  # => 5
+safe_divide(10, 0)  # => nil (prints message)
+```
+
+```ruby Block
+Dir.chdir('.') do |dir|
+  raise 'Boom!'
+rescue => e
+  puts "Rescued in block: #{e.message}"
+end
+```
+</CodeGroup>
+
+## Retry
+
+`retry` re-executes the entire `begin` block. It is useful for transient failures such as network requests.
+
+```ruby
+retries = 0
+
+begin
+  puts "Attempt ##{retries + 1}"
+  raise 'Connection failed'
+rescue RuntimeError => e
+  retries += 1
+  if retries < 3
+    puts "Retrying..."
+    retry
+  else
+    puts "Giving up after #{retries} attempts."
+    raise
+  end
+end
+
+# Attempt #1
+# Retrying...
+# Attempt #2
+# Retrying...
+# Attempt #3
+# Giving up after 3 attempts.
+# RuntimeError raised
+```
+
+<Warning>
+  `retry` re-executes the **entire** begin block, not just the line that failed. Be careful with side effects that accumulate on each attempt.
+</Warning>
+
+## Re-Raising an Exception
+
+Rescue an exception, perform some action (such as logging), then re-raise the same exception by calling `raise` with no arguments.
+
+```ruby
+begin
+  1 / 0
+rescue ZeroDivisionError
+  # Log it
+  $stderr.puts "ZeroDivisionError at #{Time.now}"
+  raise   # re-raises ZeroDivisionError, not RuntimeError
+end
+```
+
+## Exception Hierarchy
+
+Ruby's built-in exceptions form a hierarchy. `rescue` catches the specified class and all its subclasses.
+
+```
+Exception
+├── ScriptError
+│   ├── LoadError
+│   ├── NotImplementedError
+│   └── SyntaxError
+├── SignalException
+│   └── Interrupt
+├── SystemExit
+└── StandardError          ← default rescue target
+    ├── ArgumentError
+    │   └── UncaughtThrowError
+    ├── EncodingError
+    ├── FiberError
+    ├── IOError
+    │   └── EOFError
+    ├── IndexError
+    │   ├── KeyError
+    │   └── StopIteration
+    ├── NameError
+    │   └── NoMethodError
+    ├── RangeError
+    │   └── FloatDomainError
+    ├── RegexpError
+    ├── RuntimeError       ← raised by bare `raise "message"`
+    ├── SystemCallError
+    │   └── Errno::*      (ENOENT, EACCES, etc.)
+    ├── ThreadError
+    ├── TypeError
+    └── ZeroDivisionError
+```
+
+<Note>
+  Bare `rescue` catches `StandardError` and its subclasses — not `Exception` directly. This is intentional: `SignalException` (including `Interrupt`) and `SystemExit` should usually propagate unrescued.
+</Note>
+
+## Custom Exceptions
+
+Create custom exception classes by subclassing `StandardError` (or a more specific class for precision).
+
+```ruby
+# Simple custom exception
+class MyError < StandardError; end
+
+# With a default message
+class ValidationError < StandardError
+  def initialize(msg = "validation failed")
+    super
+  end
+end
+
+# With additional data
+class HttpError < StandardError
+  attr_reader :status_code
+
+  def initialize(status_code, msg = "HTTP error")
+    @status_code = status_code
+    super("#{status_code}: #{msg}")
+  end
+end
+
+# Usage
+begin
+  raise HttpError.new(404, "Not Found")
+rescue HttpError => e
+  puts e.message       # => "404: Not Found"
+  puts e.status_code   # => 404
+end
+```
+
+### Exception Cause
+
+When a rescue block raises a new exception, the original is accessible via `Exception#cause`:
+
+```ruby
+begin
+  raise('Boom 0')
+rescue => x0
+  puts "Exception: #{x0.inspect}, cause: #{x0.cause.inspect}"
+  begin
+    raise('Boom 1')
+  rescue => x1
+    puts "Exception: #{x1.inspect}, cause: #{x1.cause.inspect}"
+  end
+end
+
+# Exception: #<RuntimeError: Boom 0>, cause: nil
+# Exception: #<RuntimeError: Boom 1>, cause: #<RuntimeError: Boom 0>
+```
+
+## Backtraces
+
+Every exception records where it was raised. Access backtrace information via:
+
+- `Exception#backtrace` — returns an array of strings.
+- `Exception#backtrace_locations` — returns an array of `Thread::Backtrace::Location` objects with structured data.
+- `Exception#full_message` — returns a formatted string including the backtrace.
+
+```ruby
+begin
+  raise "oops"
+rescue => e
+  puts e.backtrace.first(3).join("\n")
+  # e.g.:
+  # script.rb:2:in '<main>'
+end
+```

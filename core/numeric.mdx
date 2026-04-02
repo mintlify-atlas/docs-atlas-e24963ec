@@ -1,0 +1,316 @@
+---
+title: "Numeric Types"
+description: "Ruby's Integer, Float, Rational, and Complex classes — arithmetic, conversion, and iteration."
+---
+
+Ruby's numeric hierarchy starts with `Numeric`, which is the parent class of `Integer`, `Float`, `Rational`, and `Complex`. All numeric objects are immutable.
+
+## Integer
+
+### Literals with different bases
+
+```ruby
+decimal = 42
+binary  = 0b101010    # => 42  (0b prefix)
+octal   = 0o52        # => 42  (0o prefix)
+hex     = 0x2A        # => 42  (0x prefix)
+
+# Underscores for readability (ignored by parser)
+one_million = 1_000_000
+pi_approx   = 3_141_592
+
+# Large integers — Ruby has arbitrary precision (Bignum is merged into Integer)
+(10 ** 100).class   # => Integer
+```
+
+### Iteration methods
+
+```ruby
+# times: iterate n times (0 to n-1)
+3.times { |i| print "#{i} " }    # prints: 0 1 2
+
+# upto: iterate from n to limit inclusive
+1.upto(5) { |i| print "#{i} " }  # prints: 1 2 3 4 5
+
+# downto: iterate from n to limit inclusive
+5.downto(1) { |i| print "#{i} " } # prints: 5 4 3 2 1
+
+# step: iterate with a custom step size
+0.step(10, 2) { |n| print "#{n} " }  # prints: 0 2 4 6 8 10
+1.step(2, 0.5) { |n| print "#{n} " } # prints: 1.0 1.5 2.0
+
+# All four return an Enumerator when called without a block
+evens = 0.step(10, 2).to_a   # => [0, 2, 4, 6, 8, 10]
+```
+
+### Arithmetic and math methods
+
+```ruby
+n = 42
+
+n.abs          # => 42
+(-42).abs      # => 42
+n.divmod(5)    # => [8, 2]  ([quotient, remainder])
+n % 5          # => 2       (modulo)
+n.gcd(18)      # => 6       (greatest common divisor)
+n.lcm(18)      # => 126     (least common multiple)
+n.gcdlcm(18)   # => [6, 126]
+
+# pow with optional modulus (efficient modular exponentiation)
+2.pow(10)         # => 1024
+2.pow(10, 1000)   # => 24   (2^10 mod 1000)
+
+# ceil, floor, round (integer versions with ndigits)
+42.ceil(-1)    # => 50   (round up to nearest 10)
+42.floor(-1)   # => 40
+42.round(-1)   # => 40
+
+# digits: decimal digits, least significant first
+12345.digits        # => [5, 4, 3, 2, 1]
+255.digits(16)      # => [15, 15]   (hexadecimal digits)
+
+# bit operations
+0b1010 & 0b1100   # => 8   (0b1000)
+0b1010 | 0b1100   # => 14  (0b1110)
+0b1010 ^ 0b1100   # => 6   (0b0110)
+1 << 4            # => 16
+16 >> 2           # => 4
+```
+
+### Conversion and representation
+
+```ruby
+# to_s with base
+42.to_s       # => "42"
+42.to_s(2)    # => "101010"  (binary)
+42.to_s(8)    # => "52"      (octal)
+42.to_s(16)   # => "2a"      (hexadecimal)
+255.to_s(16)  # => "ff"
+
+42.to_f       # => 42.0
+42.to_r       # => (42/1)
+42.to_c       # => (42+0i)
+```
+
+<Tip>
+  Use `Integer("42")` instead of `"42".to_i` when you want strict conversion — it raises `ArgumentError` for non-numeric strings rather than silently returning `0`.
+</Tip>
+
+## Float
+
+```ruby
+f = 3.14159
+
+f.ceil           # => 4
+f.floor          # => 3
+f.round          # => 3
+f.round(2)       # => 3.14
+f.truncate       # => 3   (rounds toward zero)
+
+(-3.7).ceil      # => -3
+(-3.7).floor     # => -4
+(-3.7).round     # => -4
+(-3.7).truncate  # => -3
+
+# Precision and special values
+1.0 / 0          # => Infinity
+-1.0 / 0         # => -Infinity
+0.0 / 0          # => NaN
+
+f.infinite?       # => nil  (nil: finite, 1: +inf, -1: -inf)
+(1.0/0).infinite? # => 1
+f.nan?            # => false
+(0.0/0).nan?      # => true
+f.finite?         # => true
+
+# Float to Rational (exact)
+0.5.to_r    # => (1/2)
+0.1.to_r    # => (3602879701896397/36028797018963968)  (exact IEEE 754)
+0.3.to_r.rationalize   # => (3/10)  (approximate to simplest form)
+
+# Float to Integer
+3.9.to_i    # => 3  (truncates, not rounds)
+```
+
+<Warning>
+  Floating-point arithmetic is subject to rounding errors. `0.1 + 0.2 == 0.3` is `false` in Ruby (as in most languages). Use `Rational` or the `BigDecimal` library when exact decimal arithmetic is required.
+</Warning>
+
+## Rational
+
+`Rational` represents an exact ratio of two integers. Results are always in lowest terms.
+
+```ruby
+r = Rational(1, 3)    # => (1/3)
+Rational(6, 4)        # => (3/2)  (auto-reduced)
+
+# r notation (Ruby 2.1+)
+r = 1/3r              # => (1/3)   (rational literal)
+r = 3/10r             # => (3/10)
+
+# Arithmetic with Rational is exact
+Rational(1, 3) + Rational(1, 6)  # => (1/2)
+Rational(1, 3) * 3               # => (1/1)
+Rational(1, 3) + 0.1             # => 0.43333...  (promotes to Float)
+
+r.numerator     # => 1
+r.denominator   # => 3
+r.to_f          # => 0.3333333333333333
+r.to_i          # => 0  (truncates)
+```
+
+## Complex
+
+`Complex` represents a complex number with real and imaginary parts.
+
+```ruby
+c = Complex(2, 3)    # => (2+3i)
+c = 2 + 3i           # => (2+3i)  (using i suffix, Ruby 2.1+)
+
+c.real               # => 2
+c.imaginary          # => 3  (also c.imag)
+c.abs                # => 3.605551275...  (magnitude: sqrt(4+9))
+c.angle              # => 1.0303768265...  (argument in radians)
+c.conjugate          # => (2-3i)  (also c.conj)
+c.rectangular        # => [2, 3]
+c.polar              # => [3.605..., 1.030...]
+
+# Arithmetic
+Complex(1, 2) + Complex(3, 4)   # => (4+6i)
+Complex(1, 2) * Complex(3, 4)   # => (-5+10i)
+Complex(2, 3) ** 2              # => (-5+12i)
+```
+
+## Numeric conversions
+
+<CodeGroup>
+
+```ruby Kernel conversion methods
+# Integer(): strict, raises ArgumentError on failure
+Integer("42")      # => 42
+Integer("0xFF")    # => 255
+Integer("0b1010")  # => 10
+Integer(3.9)       # => 3  (truncates)
+Integer("hello")   # => ArgumentError
+
+# Float(): strict
+Float("3.14")    # => 3.14
+Float("1e3")     # => 1000.0
+Float("abc")     # => ArgumentError
+```
+
+```ruby to_ conversion methods
+# Less strict — returns 0 or 0.0 on bad input
+"42abc".to_i    # => 42  (stops at first non-numeric char)
+"abc".to_i      # => 0
+"3.14xyz".to_f  # => 3.14
+
+42.to_r         # => (42/1)
+42.to_c         # => (42+0i)
+3.14.to_r       # => (7070651414971679/2251799813685248)
+3.14.to_c       # => (3.14+0i)
+Rational(1,2).to_f  # => 0.5
+```
+
+```ruby Numeric predicates
+42.integer?      # => true
+3.14.integer?    # => false (method is on Integer only)
+42.zero?         # => false
+0.zero?          # => true
+42.positive?     # => true
+(-3).negative?   # => true
+42.nonzero?      # => 42   (returns nil if zero, self otherwise)
+0.nonzero?       # => nil
+42.even?         # => true
+43.odd?          # => true
+```
+
+</CodeGroup>
+
+## Comparable module
+
+All numeric types include `Comparable`:
+
+```ruby
+3.between?(1, 5)        # => true
+3.between?(4, 10)       # => false
+
+# clamp: constrain to a range
+5.clamp(1, 10)          # => 5
+0.clamp(1, 10)          # => 1
+15.clamp(1, 10)         # => 10
+5.clamp(1..)            # => 5   (endless range)
+5.clamp(..3)            # => 3   (beginless range)
+
+# <=> (spaceship operator)
+1 <=> 2    # => -1
+2 <=> 2    # => 0
+3 <=> 2    # => 1
+1 <=> "a"  # => nil  (incomparable types)
+```
+
+## Math module
+
+```ruby
+Math::PI    # => 3.141592653589793
+Math::E     # => 2.718281828459045
+
+Math.sqrt(16)         # => 4.0
+Math.sqrt(2)          # => 1.4142135623730951
+Math.cbrt(27)         # => 3.0    (cube root)
+
+Math.sin(Math::PI / 2)   # => 1.0
+Math.cos(0)              # => 1.0
+Math.tan(Math::PI / 4)   # => 0.9999999999999999
+
+Math.log(Math::E)        # => 1.0   (natural log)
+Math.log(100, 10)        # => 2.0   (log base 10)
+Math.log2(8)             # => 3.0
+Math.log10(1000)         # => 3.0
+
+Math.exp(1)              # => 2.718281828459045  (e^1)
+Math.exp(2)              # => 7.38905609893065   (e^2)
+
+Math.hypot(3, 4)         # => 5.0  (sqrt(3² + 4²))
+Math.atan2(1, 1)         # => 0.7853981633974483  (π/4)
+```
+
+<AccordionGroup>
+  <Accordion title="Numeric formatting with sprintf / printf">
+    ```ruby
+    # Integer formats
+    format("%d", 42)         # => "42"
+    format("%05d", 42)       # => "00042"
+    format("%+d", 42)        # => "+42"
+    format("%x", 255)        # => "ff"
+    format("%X", 255)        # => "FF"
+    format("%o", 8)          # => "10"
+    format("%b", 10)         # => "1010"
+
+    # Float formats
+    format("%f", 3.14)       # => "3.140000"
+    format("%.2f", 3.14159)  # => "3.14"
+    format("%e", 12345.678)  # => "1.234568e+04"
+    format("%g", 0.0001234)  # => "0.0001234"
+    format("%g", 0.00001234) # => "1.234e-05"  (switches to scientific)
+
+    # Multiple values
+    format("%-10s %5.1f%%", "score:", 98.6)
+    # => "score:       98.6%"
+    ```
+  </Accordion>
+  <Accordion title="Numeric predicates summary">
+    | Method | Integer | Float | Rational | Complex |
+    |---|---|---|---|---|
+    | `zero?` | ✓ | ✓ | ✓ | ✓ |
+    | `nonzero?` | ✓ | ✓ | ✓ | ✓ |
+    | `positive?` | ✓ | ✓ | ✓ | — |
+    | `negative?` | ✓ | ✓ | ✓ | — |
+    | `finite?` | ✓ | ✓ | ✓ | ✓ |
+    | `infinite?` | ✓ | ✓ | — | — |
+    | `nan?` | — | ✓ | — | — |
+    | `even?` / `odd?` | ✓ | — | — | — |
+    | `integer?` | ✓ | — | — | — |
+    | `real?` | ✓ | ✓ | ✓ | — |
+  </Accordion>
+</AccordionGroup>

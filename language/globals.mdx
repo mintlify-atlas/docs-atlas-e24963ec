@@ -1,0 +1,339 @@
+---
+title: "Global Variables"
+description: "Pre-defined global variables in Ruby and their English-module synonyms."
+---
+
+Ruby defines a set of pre-defined global variables that provide access to interpreter state, process information, I/O streams, and the most recent regex match. Many have human-readable synonyms available through the `English` module.
+
+## The English Module
+
+Most cryptic global variables have descriptive aliases:
+
+```ruby
+require 'English'
+
+# Now you can use:
+$ERROR_INFO        # instead of $!
+$ERROR_POSITION    # instead of $@
+$LAST_MATCH_INFO   # instead of $~
+$INPUT_RECORD_SEPARATOR  # instead of $/
+# etc.
+```
+
+<Tip>
+  Use `require 'English'` in libraries and long-lived programs to make code self-documenting. The short forms (`$!`, `$~`, etc.) remain common in short scripts.
+</Tip>
+
+## Exception Variables
+
+These two variables are set inside `rescue` clauses and are `nil` everywhere else.
+
+| Variable | English synonym | Contains | Read-only |
+|----------|-----------------|----------|-----------|
+| `$!` | `$ERROR_INFO` | The rescued exception object | Yes |
+| `$@` | `$ERROR_POSITION` | Array of backtrace position strings | Yes |
+
+```ruby
+begin
+  raise RuntimeError.new('Boo!')
+rescue RuntimeError
+  p $!   # => #<RuntimeError: Boo!>
+  p $@   # => ["script.rb:2:in '<main>'", ...]
+end
+```
+
+`$@` is equivalent to `$!.backtrace`:
+
+```ruby
+begin
+  raise RuntimeError.new('Boo!')
+rescue RuntimeError
+  pp $@.take(3)
+  # =>
+  # ["(irb):1:in '<top (required)>'",
+  #  ".../irb/workspace.rb:119:in 'eval'",
+  #  ".../irb/workspace.rb:119:in 'evaluate'"]
+end
+```
+
+## Regex Match Variables
+
+These variables are populated after any successful pattern match (`=~`, `String#match`, etc.). They are **thread-local** and **frame-local**.
+
+| Variable | English synonym | Contains |
+|----------|-----------------|----------|
+| `$~` | `$LAST_MATCH_INFO` | The `MatchData` object |
+| `$&` | `$MATCH` | The matched substring |
+| `` $` `` | `$PRE_MATCH` | Substring to the left of the match |
+| `$'` | `$POST_MATCH` | Substring to the right of the match |
+| `$+` | `$LAST_PAREN_MATCH` | Last capture group matched |
+| `$1`…`$n` | _(none)_ | The nth capture group |
+
+```ruby
+"hello world" =~ /(\w+)\s+(\w+)/
+
+$~   # => #<MatchData "hello world" 1:"hello" 2:"world">
+$&   # => "hello world"
+$`   # => ""             (nothing before the match)
+$'   # => ""             (nothing after the match)
+$1   # => "hello"
+$2   # => "world"
+$+   # => "world"        (last capture group)
+```
+
+A more complex example:
+
+```ruby
+str = "The price is $42.00 today"
+str =~ /\$(\d+)\.(\d+)/
+
+$&   # => "$42.00"
+$`   # => "The price is "
+$'   # => " today"
+$1   # => "42"
+$2   # => "00"
+$+   # => "00"
+```
+
+<Note>
+  These variables are reset on every pattern match attempt, including failed ones. A failed match sets all of them to `nil`.
+</Note>
+
+## Separator Variables
+
+| Variable | Alias | English synonym | Contains | Default |
+|----------|-------|-----------------|----------|---------|
+| `$/` | `$-0` | `$INPUT_RECORD_SEPARATOR` | Input record separator | `"\n"` |
+| `$\` | | `$OUTPUT_RECORD_SEPARATOR` | Output record separator | `nil` |
+
+`$/` controls where `gets`, `readline`, and similar methods split input:
+
+```ruby
+# Read entire file as one string (paragraph mode uses "")
+$/ = nil
+content = File.read("file.txt")
+
+# Reset to default
+$/ = "\n"
+```
+
+`$\` is appended to the output of `print`:
+
+```ruby
+$\ = "\n"
+print "hello"   # prints "hello\n" — no need for explicit newline
+print "world"   # prints "world\n"
+$\ = nil        # reset
+```
+
+<Warning>
+  Setting `$/` or `$\` to non-nil values other than via command-line options is deprecated in recent Ruby versions. Prefer explicit arguments to `IO#read` and string concatenation.
+</Warning>
+
+## Stream Variables
+
+| Variable | English synonym | Contains | Default |
+|----------|-----------------|----------|---------|
+| `$stdin` | | Current standard input | `STDIN` |
+| `$stdout` | | Current standard output | `STDOUT` |
+| `$stderr` | | Current standard error | `STDERR` |
+| `$<` | `$DEFAULT_INPUT` | `ARGF` or `$stdin` | `ARGF` |
+| `$>` | `$DEFAULT_OUTPUT` | Default output for `print` | `STDOUT` |
+| `$.` | `$INPUT_LINE_NUMBER`, `$NR` | Line number in most recently read stream | `0` |
+| `$_` | `$LAST_READ_LINE` | Last line read by `gets` or `readline` | `nil` |
+
+```ruby
+# Redirect stdout to a file
+$stdout = File.open("output.log", "w")
+puts "This goes to the log"
+$stdout.flush
+$stdout = STDOUT   # restore
+
+# Redirect stderr
+$stderr = File.open("errors.log", "w")
+warn "This is an error"
+$stderr = STDERR   # restore
+```
+
+`$.` tracks the current line number:
+
+```ruby
+File.foreach("data.txt") do |line|
+  puts "Line #{$.}: #{line.chomp}"
+end
+```
+
+## Process and Program Variables
+
+| Variable | Alias | English synonym | Contains |
+|----------|-------|-----------------|----------|
+| `$0` | `$PROGRAM_NAME` | | Name of the running script |
+| `$*` | | `$ARGV` | Command-line arguments array |
+| `$$` | | `$PROCESS_ID`, `$PID` | Current process ID |
+| `$?` | | `$CHILD_STATUS` | Status of most recently exited child process |
+
+### `$0` / `$PROGRAM_NAME`
+
+```ruby
+puts $0            # => "myscript.rb" (or "-e" for one-liners)
+$0 = "new name"    # can be reassigned (changes process title on some platforms)
+```
+
+### `$LOAD_PATH` / `$:` / `$-I`
+
+Contains the array of directories Ruby searches when you call `require` or `load`:
+
+```ruby
+$LOAD_PATH
+# => ["/usr/local/lib/ruby/3.3.0", "/usr/local/lib/ruby/3.3.0/x86_64-linux", ...]
+
+# Add a directory to the load path
+$LOAD_PATH.unshift("./lib")
+
+# Resolve where a feature would be loaded from
+$LOAD_PATH.resolve_feature_path('timeout')
+# => [:rb, "/usr/local/lib/ruby/3.3.0/timeout.rb"]
+
+$LOAD_PATH.resolve_feature_path('date_core')
+# => [:so, "/usr/local/lib/ruby/3.3.0/x86_64-linux/date_core.so"]
+
+$LOAD_PATH.resolve_feature_path('nonexistent')
+# => nil
+```
+
+### `$LOADED_FEATURES` / `$"`
+
+Contains the paths of all files that have been successfully `require`d:
+
+```ruby
+require 'json'
+$LOADED_FEATURES.grep(/json/)
+# => ["/usr/local/lib/ruby/3.3.0/json.rb", ...]
+
+# Check if a library has been loaded
+$LOADED_FEATURES.any? { |f| f.end_with?("json.rb") }  # => true
+```
+
+## Debugging Variables
+
+| Variable | Contains | Default |
+|----------|----------|---------|
+| `$DEBUG` | `true` if `-d` or `--debug` flag was given | `false` |
+| `$VERBOSE` | `true` if `-v` or `-w` was given; `nil` to silence warnings | `false` |
+| `$FILENAME` | Value of `ARGF.filename` | `"-"` |
+
+```ruby
+# $DEBUG causes exceptions to be printed to $stderr as they are raised
+# Enable programmatically:
+$DEBUG = true
+
+# $VERBOSE controls warning level
+$VERBOSE = true    # enable warnings
+$VERBOSE = nil     # silence all warnings (including Kernel#warn)
+$VERBOSE = false   # default: only critical warnings
+```
+
+## Other Variables
+
+| Variable | Alias | Contains |
+|----------|-------|----------|
+| `$-F` | `$;` | Default field separator for `String#split` |
+| `$-a` | | `true` if `-a` (auto-split) flag was given |
+| `$-i` | | Extension given with `-i` (in-place edit) flag |
+| `$-l` | | `true` if `-l` flag was given |
+| `$-p` | | `true` if `-p` flag was given |
+| `$F` | | Array from splitting `$_` by `$-F` in `-a` mode |
+
+## Pre-Defined Constants
+
+These constants are always available. Unlike global variables, constants cannot be reassigned.
+
+<Tabs>
+  <Tab title="Streams">
+    ```ruby
+    STDIN   # => #<IO:<STDIN>>   — original standard input
+    STDOUT  # => #<IO:<STDOUT>>  — original standard output
+    STDERR  # => #<IO:<STDERR>>  — original standard error
+    ```
+
+    Note: `$stdin`, `$stdout`, and `$stderr` can be reassigned to redirect I/O, while `STDIN`, `STDOUT`, and `STDERR` always point to the original streams.
+  </Tab>
+  <Tab title="Environment">
+    ```ruby
+    ENV     # Hash of environment variables
+    ENV["HOME"]   # => "/home/alice"
+    ENV["PATH"]   # => "/usr/bin:/usr/local/bin:..."
+
+    ARGV    # Command-line arguments
+    ARGV    # => ["--verbose", "file.txt"] for: ruby script.rb --verbose file.txt
+
+    ARGF    # Virtual concatenation of files given on command line
+    ARGF.each_line { |line| process(line) }
+
+    TOPLEVEL_BINDING  # => #<Binding:0x...>
+    ```
+  </Tab>
+  <Tab title="Ruby version">
+    ```ruby
+    RUBY_VERSION        # => "3.3.0"
+    RUBY_RELEASE_DATE   # => "2023-12-25"
+    RUBY_PLATFORM       # => "x86_64-linux"
+    RUBY_PATCHLEVEL     # => 0
+    RUBY_REVISION       # => "cf3770f72e..."
+    RUBY_ENGINE         # => "ruby"
+    RUBY_ENGINE_VERSION # => "3.3.0"
+    RUBY_DESCRIPTION    # => "ruby 3.3.0 (2023-12-25 revision cf3770f72e) [x86_64-linux]"
+    RUBY_COPYRIGHT      # => "ruby - Copyright (C) 1993-2023 Yukihiro Matsumoto"
+    ```
+  </Tab>
+  <Tab title="DATA">
+    `DATA` is a `File` object pointing to lines following `__END__` in the current file, if that marker is present.
+
+    ```ruby
+    p DATA
+    DATA.each_line { |line| p line }
+    __END__
+    Foo
+    Bar
+    Baz
+
+    # Output:
+    # #<File:script.rb>
+    # "Foo\n"
+    # "Bar\n"
+    # "Baz\n"
+    ```
+  </Tab>
+</Tabs>
+
+## Quick Reference
+
+<Accordion title="Complete table of globals">
+  | Variable | English synonym | Description |
+  |----------|-----------------|-------------|
+  | `$!` | `$ERROR_INFO` | Current exception |
+  | `$@` | `$ERROR_POSITION` | Current exception backtrace |
+  | `$~` | `$LAST_MATCH_INFO` | Last MatchData |
+  | `$&` | `$MATCH` | Last matched string |
+  | `` $` `` | `$PRE_MATCH` | Pre-match string |
+  | `$'` | `$POST_MATCH` | Post-match string |
+  | `$+` | `$LAST_PAREN_MATCH` | Last capture group |
+  | `$1`…`$n` | _(none)_ | nth capture group |
+  | `$/` | `$INPUT_RECORD_SEPARATOR` | Input separator |
+  | `$\` | `$OUTPUT_RECORD_SEPARATOR` | Output separator |
+  | `$stdin` | | Standard input |
+  | `$stdout` | | Standard output |
+  | `$stderr` | | Standard error |
+  | `$<` | `$DEFAULT_INPUT` | ARGF or $stdin |
+  | `$>` | `$DEFAULT_OUTPUT` | Default output |
+  | `$.` | `$INPUT_LINE_NUMBER` | Current line number |
+  | `$_` | `$LAST_READ_LINE` | Last read line |
+  | `$0` / `$PROGRAM_NAME` | | Script name |
+  | `$*` | `$ARGV` | Command-line args |
+  | `$$` | `$PROCESS_ID` | Process ID |
+  | `$?` | `$CHILD_STATUS` | Child process status |
+  | `$LOAD_PATH` / `$:` | | Load path |
+  | `$LOADED_FEATURES` / `$"` | | Loaded files |
+  | `$DEBUG` | | Debug mode flag |
+  | `$VERBOSE` | | Verbose/warning level |
+</Accordion>

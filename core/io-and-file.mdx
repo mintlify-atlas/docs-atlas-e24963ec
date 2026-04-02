@@ -1,0 +1,338 @@
+---
+title: "IO and File"
+description: "Reading, writing, and streaming files and I/O in Ruby."
+---
+
+Ruby provides the `File`, `IO`, `Dir`, and `Tempfile` classes for working with the filesystem and standard streams. Most operations follow a consistent open-read/write-close pattern, with block forms that handle closing automatically.
+
+## Opening files
+
+`File.open` returns a `File` object. Pass a block to ensure the file is closed when the block exits — even if an exception is raised.
+
+<CodeGroup>
+
+```ruby block form (auto-close)
+# The file is closed automatically when the block exits
+File.open("data.txt", "r") do |f|
+  content = f.read
+  puts content
+end
+```
+
+```ruby without block
+# You must close the file manually
+f = File.open("data.txt", "r")
+content = f.read
+f.close
+```
+
+</CodeGroup>
+
+### File modes
+
+| Mode | Meaning |
+|------|---------|
+| `"r"` | Read-only, start at beginning (default) |
+| `"w"` | Write-only, truncate or create |
+| `"a"` | Append-only, create if missing |
+| `"r+"` | Read-write, start at beginning |
+| `"w+"` | Read-write, truncate or create |
+| `"a+"` | Read-write, append writes to end |
+| `"rb"` | Read-only in binary mode |
+| `"wb"` | Write-only in binary mode |
+
+```ruby
+# Open for appending
+File.open("log.txt", "a") do |f|
+  f.puts "New log entry"
+end
+
+# Open in binary mode (no encoding conversion, no newline translation)
+File.open("image.png", "rb") do |f|
+  bytes = f.read
+end
+
+# Open for reading and writing simultaneously
+File.open("config.txt", "r+") do |f|
+  content = f.read
+  f.rewind
+  f.write(content.upcase)
+end
+```
+
+<Note>
+  Binary mode (`"b"`) disables encoding conversion and newline translation. Always use it when reading or writing non-text files such as images, PDFs, or archives.
+</Note>
+
+## Reading files
+
+<Steps>
+  <Step title="Read the entire file at once">
+    `File.read` is a class method shortcut — no block or explicit close needed.
+
+    ```ruby
+    # Read full content as a string
+    content = File.read("data.txt")
+
+    # Specify encoding
+    content = File.read("data.txt", encoding: "UTF-8")
+    ```
+  </Step>
+
+  <Step title="Read all lines into an array">
+    `File.readlines` returns an array where each element is one line, including the trailing newline.
+
+    ```ruby
+    lines = File.readlines("data.txt")
+    # => ["line one\n", "line two\n", "line three\n"]
+
+    # Strip newlines with chomp: true
+    lines = File.readlines("data.txt", chomp: true)
+    # => ["line one", "line two", "line three"]
+    ```
+  </Step>
+
+  <Step title="Iterate line by line">
+    Use `each_line` (or `IO.foreach`) to process large files without loading them entirely into memory.
+
+    ```ruby
+    # each_line on an open file handle
+    File.open("data.txt", "r") do |f|
+      f.each_line do |line|
+        puts line.chomp
+      end
+    end
+
+    # IO.foreach: shortcut that opens, iterates, and closes
+    IO.foreach("data.txt") do |line|
+      puts line.chomp
+    end
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  For large files, prefer `each_line` or `IO.foreach` over `File.read` or `File.readlines`. Streaming avoids loading the entire file into memory at once.
+</Tip>
+
+## Writing files
+
+```ruby
+File.open("output.txt", "w") do |f|
+  # write: writes a string, returns bytes written, no newline added
+  f.write("Hello, world!")
+
+  # puts: writes string + newline; arrays write each element on its own line
+  f.puts "First line"
+  f.puts "Second line"
+  f.puts ["alpha", "beta", "gamma"]
+
+  # print: writes string without appending a newline
+  f.print "no newline here"
+end
+```
+
+<CodeGroup>
+
+```ruby write shortcut
+# File.write opens, writes, and closes in one call
+# Returns the number of bytes written
+bytes = File.write("output.txt", "Hello, world!\n")
+```
+
+```ruby append mode
+# Append to an existing file (creates it if absent)
+File.open("log.txt", "a") do |f|
+  f.puts Time.now.to_s
+end
+```
+
+</CodeGroup>
+
+## File utility methods
+
+Ruby's `File` class provides a rich set of class methods for querying and manipulating paths and file metadata.
+
+### Existence and size
+
+```ruby
+File.exist?("data.txt")      # => true or false
+File.file?("data.txt")       # => true if it's a regular file
+File.directory?("data.txt")  # => false (it's not a directory)
+File.size("data.txt")        # => size in bytes, e.g. 1024
+File.zero?("empty.txt")      # => true if file exists and is empty
+
+File.readable?("data.txt")   # => true if readable by current process
+File.writable?("data.txt")   # => true if writable
+```
+
+### Path manipulation
+
+```ruby
+path = "/home/alice/projects/app/config.yml"
+
+File.basename(path)           # => "config.yml"
+File.basename(path, ".yml")   # => "config"  (strips given extension)
+File.dirname(path)            # => "/home/alice/projects/app"
+File.extname(path)            # => ".yml"
+
+# Join path components portably (handles separators)
+File.join("home", "alice", "data.txt")
+# => "home/alice/data.txt"
+
+# Resolve relative paths and ~ expansion
+File.expand_path("~/projects/app")
+# => "/home/alice/projects/app"
+
+File.expand_path("../config.yml", "/home/alice/app/lib")
+# => "/home/alice/app/config.yml"
+```
+
+### File metadata
+
+```ruby
+stat = File.stat("data.txt")
+stat.size     # => bytes
+stat.mtime    # => Time object: last modification time
+stat.ctime    # => Time object: last status change
+stat.mode     # => integer permission bits
+
+# Convenience method
+File.mtime("data.txt")  # => Time object
+```
+
+<Note>
+  `File.expand_path` resolves paths relative to the current working directory unless you supply a second argument as the base directory. Use `__dir__` as the base when working with paths relative to the current source file.
+
+  ```ruby
+  config_path = File.expand_path("../config.yml", __dir__)
+  ```
+</Note>
+
+## Dir methods
+
+```ruby
+# glob: return files matching a pattern
+Dir.glob("*.txt")              # => ["data.txt", "output.txt"]
+Dir.glob("**/*.rb")            # => all .rb files, recursively
+Dir.glob("lib/**/*.{rb,rake}") # => multiple extensions
+
+# With a block: yields each match instead of returning an array
+Dir.glob("*.txt") { |f| puts f }
+
+# entries: all entries including . and ..
+Dir.entries(".")
+# => [".", "..", "data.txt", "output.txt", "src"]
+
+# mkdir: create a directory (raises if it already exists)
+Dir.mkdir("reports")
+Dir.mkdir("reports", 0o755)  # with permissions
+
+# exist?: check for directory
+Dir.exist?("reports")  # => true
+
+# pwd / getwd: current working directory
+Dir.pwd    # => "/home/alice/projects/app"
+
+# chdir: change working directory for the duration of a block
+Dir.chdir("/tmp") do
+  puts Dir.pwd  # => "/tmp"
+end
+# Back to original after the block
+```
+
+<Tip>
+  Use `Dir.glob("**/*")` carefully in large directory trees — it loads all paths into memory. For very large trees, consider using `Find.find` from the standard library, which streams results.
+</Tip>
+
+## Standard streams
+
+Ruby exposes the three standard POSIX streams as constants: `STDIN`, `STDOUT`, and `STDERR`. The global variables `$stdin`, `$stdout`, and `$stderr` point to the same objects by default but can be reassigned.
+
+```ruby
+# STDOUT: write to standard output
+STDOUT.puts "Hello from STDOUT"
+$stdout.print "Same thing\n"
+
+# The Kernel methods puts/print/p write to $stdout
+puts "shorthand for $stdout.puts"
+
+# STDERR: write errors and diagnostics
+STDERR.puts "Something went wrong"
+$stderr.puts "Also works"
+warn "warn writes to STDERR with a newline"
+
+# STDIN: read from standard input
+line = STDIN.gets          # reads one line (blocks until Enter)
+line = $stdin.gets&.chomp  # same, strip newline
+
+# Read all of STDIN (e.g. piped input)
+input = STDIN.read
+```
+
+<CodeGroup>
+
+```ruby redirect $stdout in tests
+# Capture output in tests by temporarily redirecting $stdout
+require "stringio"
+
+output = StringIO.new
+$stdout = output
+puts "captured line"
+$stdout = STDOUT
+
+output.string  # => "captured line\n"
+```
+
+```bash redirect at the shell level
+# Redirect stdout and stderr when running a script
+ruby script.rb > output.log 2> errors.log
+
+# Merge stderr into stdout
+ruby script.rb > combined.log 2>&1
+```
+
+</CodeGroup>
+
+## Tempfile
+
+`Tempfile` creates a temporary file that is automatically deleted when it is closed and garbage collected (or when the process exits). It lives in the system's temp directory by default.
+
+```ruby
+require "tempfile"
+
+# Create a temp file with a given basename
+Tempfile.create("report") do |f|
+  f.puts "Temporary data"
+  f.rewind
+  puts f.read   # => "Temporary data\n"
+  puts f.path   # => "/tmp/report20240315-12345-abcdef"
+end
+# File is deleted when the block exits
+```
+
+<CodeGroup>
+
+```ruby with explicit basename and extension
+Tempfile.create(["import", ".csv"]) do |f|
+  f.write "name,age\nalice,30\n"
+  f.flush
+  # pass f.path to another process or library
+  system("wc -l #{f.path}")
+end
+```
+
+```ruby manual lifecycle
+require "tempfile"
+
+tmp = Tempfile.new("data")
+tmp.write("hello")
+tmp.close   # flushes and closes, but does NOT delete yet
+tmp.unlink  # explicitly delete the file
+```
+
+</CodeGroup>
+
+<Note>
+  Prefer `Tempfile.create` with a block over `Tempfile.new`. The block form guarantees cleanup even when exceptions occur.
+</Note>

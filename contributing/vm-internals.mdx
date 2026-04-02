@@ -1,0 +1,207 @@
+---
+title: "VM Internals"
+description: "An overview of CRuby's virtual machine, bytecode, and execution model."
+---
+
+CRuby executes Ruby code using **YARV** (Yet Another Ruby VM), a stack-based bytecode interpreter introduced in Ruby 1.9. Understanding YARV is helpful when working on the interpreter, debugging performance issues, or reading VM-related source files like `vm.c`, `compile.c`, and `insns.def`.
+
+## The YARV Execution Model
+
+Ruby source code is compiled to bytecode in two stages before any code runs:
+
+1. **Parse** — The parser (`parse.y`) produces an Abstract Syntax Tree (AST).
+2. **Compile** — The compiler (`compile.c`) walks the AST and emits a sequence of YARV instructions into an **instruction sequence** (`rb_iseq_t`).
+3. **Execute** — The VM (`vm.c`, `vm_exec.c`) dispatches each instruction in a tight loop using the `rb_control_frame_t` stack.
+
+You can inspect the bytecode for any Ruby code with `RubyVM::InstructionSequence`:
+
+```ruby
+iseq = RubyVM::InstructionSequence.compile("1 + 2")
+puts iseq.disasm
+```
+
+```text
+== disasm: #<ISeq:<compiled>@<compiled>:1 (1,0)-(1,5)>
+0000 putobject_INT2FIX 1                                              (   1)[Li]
+0002 putobject_INT2FIX 2
+0004 opt_plus           <calldata!mid:+, argc:1, ARGS_SIMPLE>
+0006 leave
+```
+
+## Instruction Sequences (ISEQ)
+
+An instruction sequence (`rb_iseq_t`, defined in `iseq.h`) is the compiled form of a method, block, class body, or top-level script. It contains:
+
+- The array of bytecode instructions and their operands
+- A table of local variable names and stack depth requirements (`local_size`, `stack_max`)
+- Source location information for backtraces
+- References to nested instruction sequences (for blocks defined inside a method)
+
+**Source files:**
+- `compile.c` — compiles the AST into an ISEQ
+- `insns.def` — defines every YARV instruction and its C implementation
+- `iseq.c` — ISEQ creation, inspection, and serialization
+
+`insns.def` is the canonical reference for instruction semantics. Each entry declares the instruction name, its stack effect, and the C code that implements it:
+
+```c
+/* insns.def (simplified excerpt) */
+DEFINE_INSN
+opt_plus
+(CALL_DATA cd)
+(VALUE recv, VALUE obj)
+(VALUE val)
+{
+    val = vm_opt_plus(recv, obj);
+    if (val == Qundef) {
+        CALL_SIMPLE_METHOD();
+    }
+}
+```
+
+## VM Stack and Frames
+
+### Overall Stack Layout
+
+The Ruby VM uses a **single contiguous memory region** (`ec->vm_stack`) shared between two regions that grow toward each other:
+
+```text
+High addresses (ec->vm_stack + ec->vm_stack_size)
+    ↓
+    [CFP region] ← grows DOWNWARD as frames are pushed
+    [CFP - 1]
+    [CFP - 2]
+    ...
+
+         (unused — stack overflow when the two regions meet)
+
+    ...
+    [SP + n]     Values pushed here
+    [cfp->sp]  ← current frame's stack pointer
+    ↑
+Low addresses (ec->vm_stack)
+```
+
+- **Control frames (CFP):** start at the top of the memory region and grow downward. Each new frame is allocated at `cfp - 1`.
+- **Value stack (SP):** starts at the bottom and grows upward. Each frame's `cfp->sp` points to the top of its value stack.
+
+Stack overflow is detected by `CHECK_VM_STACK_OVERFLOW0`, which raises `SystemStackError` when CFP and SP are about to collide.
+
+### Control Frames (`rb_control_frame_t`)
+
+Every active method call, block, and top-level script has a `rb_control_frame_t` (CFP). Key fields:
+
+| Field | Description |
+|---|---|
+| `cfp->pc` | Program counter — points to the next instruction to execute |
+| `cfp->sp` | Stack pointer — top of the value stack for this frame |
+| `cfp->ep` | Environment pointer — points to the frame's environment (locals + flags) |
+| `cfp->self` | The receiver (`self`) for this frame |
+| `cfp->iseq` | The instruction sequence being executed |
+| `cfp->block_code` | The block attached to this call (if any) |
+
+### Frame Value Stack Layout
+
+Each frame owns a contiguous slice of the VM stack for its local variables and temporaries. From low to high addresses:
+
+```text
+High addr (cfp->sp)          ← grows upward during execution
+    [Temporary values]
+    [Flags / Block / CME]    ← cfp->ep points here (VM_ENV_DATA_SIZE = 3 slots)
+    [Local variables]
+    [Arguments]
+    [self]
+Low addr (frame base)
+```
+
+Local variables are accessed relative to `cfp->ep`. The `getlocal` instruction uses `val = cfp->ep[-idx]`. This layout means arguments passed by the caller are already in the right place for the callee — they are never copied.
+
+### Concrete Example
+
+For the method:
+
+```ruby
+def foo(x, y)
+  z = x.casecmp(y)
+end
+
+foo(:one, :two)
+```
+
+After the call to `foo` is set up, the frame's value stack looks like:
+
+```text
+0x8  [cfp->sp] ← temporaries grow from here
+0x7  [:one    ]  ← getlocal x@0 reads cfp->ep[-1] = 0x7 → :one
+0x6  [flags   ]  ← cfp->ep (environment pointer)
+0x5  [no block]
+0x4  [CME: foo]
+0x3  [z (nil) ]  ← local z
+0x2  [:two    ]  ← argument y
+0x1  [:one    ]  ← argument x
+0x0  [self    ]
+```
+
+## The Global VM Lock (GVL)
+
+CRuby uses a **Global VM Lock** (also called GIL — Global Interpreter Lock) to ensure that only one thread executes Ruby bytecode at a time. This simplifies the garbage collector and protects internal data structures from concurrent mutation.
+
+Key implications:
+- CPU-bound multi-threaded Ruby programs cannot use multiple CPU cores simultaneously for Ruby code.
+- Threads release the GVL during blocking I/O operations (network, file, `sleep`, etc.), so I/O-bound programs do benefit from threads.
+- C extensions can release the GVL explicitly using `rb_thread_call_without_gvl` to run CPU-intensive C code in parallel.
+
+Ruby 3.x introduces **Ractors** as an experimental alternative concurrency model that avoids the GVL by enforcing object isolation between ractors.
+
+The GVL implementation lives in `thread.c` and `thread_pthread.c`.
+
+## YJIT: JIT Compilation of Bytecode
+
+YJIT (Yet Another JIT) is Ruby's built-in just-in-time compiler, written in Rust and C. It compiles YARV bytecode to native machine code lazily — a method is compiled to native code after it has been called a certain number of times.
+
+How it fits into the execution pipeline:
+
+1. Methods start executing in the YARV interpreter as normal.
+2. After a method is called enough times, YJIT compiles its instruction sequence to machine code.
+3. Future calls jump directly to the compiled code, bypassing the interpreter dispatch loop.
+4. If a type assumption is violated at runtime (a "side exit"), execution falls back to the interpreter for that path.
+
+Enable YJIT at build time with `--enable-yjit`, then activate it at runtime:
+
+```bash
+ruby --yjit my_script.rb
+```
+
+Inspect JIT statistics:
+
+```ruby
+# In code
+RubyVM::YJIT.stats if RubyVM::YJIT.enabled?
+```
+
+```bash
+# From the command line
+ruby --yjit --yjit-stats my_script.rb
+```
+
+**Source files:**
+- `yjit/src/` — Rust source for code generation and IR
+- `yjit.c` / `yjit.h` — C glue layer that interfaces with the VM
+- `yjit/bindgen/` — C bindings generated from Ruby's C headers
+
+<Note>
+  YJIT requires a Rust toolchain at build time but has no runtime Rust dependency. The generated machine code is self-contained.
+</Note>
+
+## Relevant Source Files
+
+| File | Description |
+|---|---|
+| `compile.c` | AST → ISEQ compiler |
+| `insns.def` | YARV instruction definitions |
+| `vm.c` | VM initialization and main loop |
+| `vm_exec.c` | Instruction dispatch loop |
+| `vm_insnhelper.c` | Helper functions called from instructions |
+| `iseq.c` | Instruction sequence management |
+| `thread.c` | Thread and GVL management |
+| `yjit/src/` | YJIT Rust source |
